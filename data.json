@@ -1,0 +1,59 @@
+{
+	"api": {
+		"baseUrl": "https://your-databricks-app-url.com",
+		"endpoints": {
+			"single": "/api/search",
+			"batch": "/api/analyze-batch"
+		}
+	},
+	"kpi": {
+		"revenue": "12.5 Tỷ",
+		"sold": "89,305",
+		"avg": "145k",
+		"growth": "+12.5%"
+	},
+	"mockProductsSingle": [
+		{
+			"id": 1,
+			"name": "Tai nghe Bluetooth TWS Pro",
+			"cat": "Điện tử",
+			"price": "350k",
+			"sold": "2.450",
+			"rev": "857M"
+		},
+		{
+			"id": 2,
+			"name": "Áo Thun Basic Unisex",
+			"cat": "Thời trang",
+			"price": "129k",
+			"sold": "3.100",
+			"rev": "399M"
+		}
+	],
+	"mockProductsBatch": [
+		{
+			"id": 1,
+			"name": "Dữ liệu từ File CSV 1",
+			"cat": "Tổng hợp",
+			"price": "500k",
+			"sold": "100",
+			"rev": "50M"
+		},
+		{
+			"id": 2,
+			"name": "Dữ liệu từ File CSV 2",
+			"cat": "Tổng hợp",
+			"price": "200k",
+			"sold": "500",
+			"rev": "100M"
+		},
+		{
+			"id": 3,
+			"name": "Dữ liệu từ File CSV 3",
+			"cat": "Tổng hợp",
+			"price": "150k",
+			"sold": "800",
+			"rev": "120M"
+		}
+	]
+}
