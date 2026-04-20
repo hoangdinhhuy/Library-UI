@@ -1,5 +1,5 @@
-﻿// ============================================================
-// ðŸš€ TIKI ANALYST - FRONTEND (FIXED VERSION)
+// ============================================================
+// ð TIKI ANALYST - FRONTEND (FIXED VERSION)
 // ============================================================
 
 const { useState, useRef } = React;
@@ -35,13 +35,13 @@ const calculateKPI = (products) => {
         return Number.isFinite(parsed) ? parsed : null;
     };
 
-    // TÃ­nh tá»•ng doanh thu tá»« estimated_revenue
+    // TÃ­nh tá»ng doanh thu tá»« estimated_revenue
     const totalRevenue = products.reduce((sum, p) => {
         const revenue = parseLocaleInteger(p.rev);
         return sum + revenue;
     }, 0);
 
-    // TÃ­nh tá»•ng sáº£n pháº©m bÃ¡n ra tá»« boughtInLastMonth
+    // TÃ­nh tá»ng sáº£n pháº©m bÃ¡n ra tá»« boughtInLastMonth
     const totalSold = products.reduce((sum, p) => {
         const sold = parseLocaleInteger(p.sold);
         return sum + sold;
@@ -54,7 +54,7 @@ const calculateKPI = (products) => {
     }, 0);
     const avgPrice = products.length > 0 ? totalPrice / products.length : 0;
 
-    // Æ¯u tiÃªn láº¥y tÄƒng trÆ°á»Ÿng tháº­t tá»« backend náº¿u cÃ³; khÃ´ng tá»± bá»‹a cÃ´ng thá»©c tá»« sá»‘ lÆ°á»£ng item.
+    // Æ¯u tiÃªn láº¥y tÄng trÆ°á»ng tháº­t tá»« backend náº¿u cÃ³; khÃ´ng tá»± bá»a cÃ´ng thá»©c tá»« sá» lÆ°á»£ng item.
     const growthValues = products
         .map((p) => parseNumeric(p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth))
         .filter((v) => v !== null);
@@ -66,7 +66,7 @@ const calculateKPI = (products) => {
         growth = `${sign}${avgGrowth.toFixed(1)}%`;
     } else if (products.length > 0 && totalSold > 0) {
         // Fallback: Tính growth dựa trên MEDIAN của search results
-        // Logic: So sánh avg sold per product với median của results
+        // Logic: So sánh avg sold per product với median của results → tự động scale
         const soldValues = products
             .map((p) => parseLocaleInteger(p.sold))
             .filter((v) => v > 0)
@@ -94,7 +94,7 @@ const calculateKPI = (products) => {
 };
 
 // ============================================================
-// ðŸ›‘ API CONFIGURATION & FUNCTIONS
+// ð API CONFIGURATION & FUNCTIONS
 // ============================================================
 
 const resolveApiBaseUrl = () => {
@@ -121,12 +121,12 @@ const executeAnalysis = async (type, payload) => {
         }
 
         if (window.location.protocol === 'https:' && API_BASE_URL.startsWith('http://')) {
-            throw new Error('Trang Ä‘ang cháº¡y HTTPS nhÆ°ng API lÃ  HTTP (mixed content sáº½ bá»‹ cháº·n).');
+            throw new Error('Trang Äang cháº¡y HTTPS nhÆ°ng API lÃ  HTTP (mixed content sáº½ bá» cháº·n).');
         }
 
         let response;
         if (type === 'single') {
-            // âœ… FIX: DÃ¹ng API_BASE_URL thay vÃ¬ API_URL
+            // â FIX: DÃ¹ng API_BASE_URL thay vÃ¬ API_URL
             response = await fetch(`${API_BASE_URL}/api/search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -139,7 +139,7 @@ const executeAnalysis = async (type, payload) => {
         } else {
             const formData = new FormData();
             formData.append('file', payload.file);
-            // âœ… FIX: DÃ¹ng API_BASE_URL thay vÃ¬ API_URL
+            // â FIX: DÃ¹ng API_BASE_URL thay vÃ¬ API_URL
             response = await fetch(`${API_BASE_URL}/api/analyze-batch`, {
                 method: 'POST',
                 body: formData
@@ -156,7 +156,7 @@ const executeAnalysis = async (type, payload) => {
             throw new Error(result.message || 'Unknown error');
         }
         
-        // âœ… FIX: Response mapping Ä‘Ãºng vá»›i backend format
+        // â FIX: Response mapping ÄÃºng vá»i backend format
         return {
             products: result.data.products.map((p, idx) => ({
                 id: idx + 1,
@@ -179,7 +179,7 @@ const executeAnalysis = async (type, payload) => {
 
 const renderFormattedInsight = (insight) => {
     if (!insight) {
-        return <div className="text-sm text-gray-300">KhÃ´ng cÃ³ insight Ä‘á»ƒ hiá»ƒn thá»‹.</div>;
+        return <div className="text-sm text-gray-300">KhÃ´ng cÃ³ insight Äá» hiá»n thá».</div>;
     }
 
     const blocks = insight.split(/\n{2,}/g).filter(Boolean);
@@ -187,7 +187,7 @@ const renderFormattedInsight = (insight) => {
     return blocks.map((block, index) => {
         const lines = block.split('\n').filter(Boolean);
         const firstLine = lines[0].trim();
-        const isHeading = /^(?:\*\*|##|###|ðŸŽ¯|ðŸ“ˆ|ðŸ’¡|ðŸ“Š|ðŸ’°|âœ…|ðŸ”¥)/.test(firstLine);
+        const isHeading = /^(?:\*\*|##|###|ð¯|ð|ð¡|ð|ð°|â|ð¥)/.test(firstLine);
 
         return (
             <div
@@ -219,7 +219,7 @@ const renderFormattedInsight = (insight) => {
                         const content = trimmed.replace(/^-\s+(.+)$/, '$1');
                         return (
                             <div key={lineIndex} className="flex gap-3 text-sm text-gray-200 leading-6">
-                                <span className="text-rose-400">â€¢</span>
+                                <span className="text-rose-400">â¢</span>
                                 <span>{content}</span>
                             </div>
                         );
@@ -237,7 +237,7 @@ const renderFormattedInsight = (insight) => {
 };
 
 // ============================================================
-// âœ… MAIN APP COMPONENT
+// â MAIN APP COMPONENT
 // ============================================================
 
 function App() {
@@ -284,7 +284,7 @@ function App() {
             setTimeout(() => lucide.createIcons(), 100);
             
         } catch (error) {
-            const errorMsg = `âŒ Lá»—i káº¿t ná»‘i Backend:\n${error.message}\n\nVui lÃ²ng kiá»ƒm tra:\n1. Backend Ä‘Ã£ cháº¡y chÆ°a? (python main.py)\n2. URL API Ä‘Ãºng chÆ°a? (${API_BASE_URL || 'CHUA_CAU_HINH'})\n3. Náº¿u cháº¡y trÃªn GitHub Pages: API pháº£i lÃ  public URL (Render/Railway/Fly.io), khÃ´ng dÃ¹ng localhost\n4. Náº¿u web lÃ  HTTPS thÃ¬ API cÅ©ng pháº£i HTTPS\n5. CORS Ä‘Ã£ cáº¥u hÃ¬nh chÆ°a?`;
+            const errorMsg = `â Lá»i káº¿t ná»i Backend:\n${error.message}\n\nVui lÃ²ng kiá»m tra:\n1. Backend ÄÃ£ cháº¡y chÆ°a? (python main.py)\n2. URL API ÄÃºng chÆ°a? (${API_BASE_URL || 'CHUA_CAU_HINH'})\n3. Náº¿u cháº¡y trÃªn GitHub Pages: API pháº£i lÃ  public URL (Render/Railway/Fly.io), khÃ´ng dÃ¹ng localhost\n4. Náº¿u web lÃ  HTTPS thÃ¬ API cÅ©ng pháº£i HTTPS\n5. CORS ÄÃ£ cáº¥u hÃ¬nh chÆ°a?`;
             
             if (type === 'single') {
                 setInsightSingle(errorMsg);
@@ -320,9 +320,9 @@ function App() {
 
         const pdfContent = `
             <div style="font-family: 'Arial', sans-serif; padding: 20px; background: white; color: black;">
-                <h1 style="color: #1e293b; margin-bottom: 5px;">BÃ¡o CÃ¡o PhÃ¢n TÃ­ch Thá»‹ TrÆ°á»ng E-Commerce</h1>
+                <h1 style="color: #1e293b; margin-bottom: 5px;">BÃ¡o CÃ¡o PhÃ¢n TÃ­ch Thá» TrÆ°á»ng E-Commerce</h1>
                 <p style="color: #666; font-size: 14px; margin: 5px 0;">
-                    Nguá»“n: ${isSingle ? `Tá»« khÃ³a: ${titleKeyword}` : `File: ${titleKeyword}`}
+                    Nguá»n: ${isSingle ? `Tá»« khÃ³a: ${titleKeyword}` : `File: ${titleKeyword}`}
                 </p>
                 <p style="color: #666; font-size: 14px; margin: 5px 0;">
                     NgÃ y táº¡o: ${new Date().toLocaleDateString('vi-VN')}
@@ -332,7 +332,7 @@ function App() {
                     AI Insights
                 </h2>
                 <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; white-space: pre-wrap; font-family: monospace; font-size: 12px; line-height: 1.6;">
-                    ${(insightData || "KhÃ´ng cÃ³ dá»¯ liá»‡u.").replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                    ${(insightData || "KhÃ´ng cÃ³ dá»¯ liá»u.").replace(/</g, '&lt;').replace(/>/g, '&gt;')}
                 </div>
                 
                 <h2 style="color: #1e293b; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #e11d48; padding-bottom: 10px;">
@@ -392,10 +392,10 @@ function App() {
             {/* KPI CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {[
-                    { label: "Tá»•ng Doanh Thu", val: kpi.revenue, icon: "dollar-sign", color: "text-green-400" },
+                    { label: "Tá»ng Doanh Thu", val: kpi.revenue, icon: "dollar-sign", color: "text-green-400" },
                     { label: "Sáº£n Pháº©m BÃ¡n Ra", val: kpi.sold, icon: "shopping-bag", color: "text-blue-400" },
                     { label: "GiÃ¡ TB ÄÆ¡n HÃ ng", val: kpi.avg, icon: "tag", color: "text-purple-400" },
-                    { label: "TÄƒng TrÆ°á»Ÿng", val: kpi.growth, icon: "trending-up", color: "text-rose-400" },
+                    { label: "TÄng TrÆ°á»ng", val: kpi.growth, icon: "trending-up", color: "text-rose-400" },
                 ].map((item, idx) => (
                     <div key={idx} className="bg-[#1e293b] p-5 rounded-xl border border-gray-700 shadow-sm">
                         <div className="flex justify-between items-start mb-2">
@@ -417,7 +417,7 @@ function App() {
                         </div>
                         <div>
                             <h3 className="text-lg font-bold text-white">AI Smart Insights</h3>
-                            <p className="text-xs text-indigo-200">PhÃ¢n tÃ­ch tá»± Ä‘á»™ng bá»Ÿi Gemini AI</p>
+                            <p className="text-xs text-indigo-200">PhÃ¢n tÃ­ch tá»± Äá»ng bá»i Gemini AI</p>
                         </div>
                     </div>
                     <div className="bg-black/30 backdrop-blur-sm rounded-lg p-4 border border-white/10 text-sm leading-relaxed text-gray-200">
@@ -432,7 +432,7 @@ function App() {
                     <h3 className="font-bold text-white flex items-center gap-2">
                         <Icon name="trophy" size={18} className="text-yellow-500"/> Top Sáº£n Pháº©m
                     </h3>
-                    <span className="text-xs text-gray-400">Dá»¯ liá»‡u tá»« Backend API</span>
+                    <span className="text-xs text-gray-400">Dá»¯ liá»u tá»« Backend API</span>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -466,7 +466,7 @@ function App() {
                                         )}
                                     </td>
                                     <td className="px-6 py-4 font-medium text-white truncate max-w-[200px]" title={item.name}>
-                                        {isTop3 && <span className="text-rose-400 mr-1">ðŸ†</span>}
+                                        {isTop3 && <span className="text-rose-400 mr-1">ð</span>}
                                         {item.name}
                                     </td>
                                     <td className="px-6 py-4">
@@ -516,13 +516,13 @@ function App() {
 
                 <nav className="flex-1 p-4 space-y-2">
                     <button onClick={() => setActiveTab('single')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'single' ? 'bg-rose-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-                        <Icon name="search" size={18} /> PhÃ¢n tÃ­ch Ä‘Æ¡n
+                        <Icon name="search" size={18} /> PhÃ¢n tÃ­ch ÄÆ¡n
                     </button>
                     <button onClick={() => setActiveTab('batch')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'batch' ? 'bg-rose-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
                         <Icon name="upload-cloud" size={18} /> PhÃ¢n tÃ­ch loáº¡t (CSV)
                     </button>
                     <div className="pt-4 mt-4 border-t border-gray-700">
-                        <p className="px-4 text-xs font-semibold text-gray-500 uppercase mb-2">Há»‡ thá»‘ng</p>
+                        <p className="px-4 text-xs font-semibold text-gray-500 uppercase mb-2">Há» thá»ng</p>
                         <div className="px-4 py-2 text-sm text-gray-400 flex items-center gap-2">
                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> API: {API_BASE_URL}
                         </div>
@@ -533,7 +533,7 @@ function App() {
                 </nav>
                 
                 <div className="p-4 border-t border-gray-700 text-xs text-gray-500 text-center">
-                    v1.0.0 â€¢ Tiki Project
+                    v1.0.0 â¢ Tiki Project
                 </div>
             </div>
 
@@ -543,7 +543,7 @@ function App() {
                 {/* HEADER */}
                 <header className="h-16 bg-[#1e293b] border-b border-gray-700 flex items-center justify-between px-8 z-10">
                     <h2 className="text-xl font-bold text-white">
-                        {activeTab === 'single' ? 'PhÃ¢n tÃ­ch tá»« khÃ³a' : 'PhÃ¢n tÃ­ch dá»¯ liá»‡u CSV'}
+                        {activeTab === 'single' ? 'PhÃ¢n tÃ­ch tá»« khÃ³a' : 'PhÃ¢n tÃ­ch dá»¯ liá»u CSV'}
                     </h2>
                     <div className="flex items-center gap-4">
                         {(resultSingle || resultBatch) && (
@@ -600,10 +600,10 @@ function App() {
                                         <Icon name="upload-cloud" size={32} className="text-rose-500" />
                                     </div>
                                     <h3 className="text-lg font-bold text-white mb-1">
-                                        {selectedFile ? selectedFile.name : "Click Ä‘á»ƒ táº£i lÃªn file CSV"}
+                                        {selectedFile ? selectedFile.name : "Click Äá» táº£i lÃªn file CSV"}
                                     </h3>
                                     <p className="text-sm text-gray-400">
-                                        {selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : "Há»— trá»£ .csv (Max 50MB)"}
+                                        {selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : "Há» trá»£ .csv (Max 50MB)"}
                                     </p>
                                 </div>
                                 {selectedFile && (
@@ -627,7 +627,7 @@ function App() {
                         <div className="flex flex-col items-center justify-center py-20 text-rose-500 animate-pulse">
                             <Icon name="bot" size={48} className="mb-4" />
                             <p className="text-lg font-medium">Äang gá»i Backend API...</p>
-                            <p className="text-sm text-gray-400">Vui lÃ²ng Ä‘á»£i</p>
+                            <p className="text-sm text-gray-400">Vui lÃ²ng Äá»£i</p>
                         </div>
                     )}
 
@@ -643,8 +643,8 @@ function App() {
                             <Icon name="bar-chart-2" size={64} className="mb-4" />
                             <p className="text-lg">
                                 {activeTab === 'single' 
-                                    ? "Nháº­p tá»« khÃ³a Ä‘á»ƒ báº¯t Ä‘áº§u" 
-                                    : "Táº£i lÃªn CSV Ä‘á»ƒ phÃ¢n tÃ­ch"}
+                                    ? "Nháº­p tá»« khÃ³a Äá» báº¯t Äáº§u" 
+                                    : "Táº£i lÃªn CSV Äá» phÃ¢n tÃ­ch"}
                             </p>
                         </div>
                     )}
@@ -655,9 +655,7 @@ function App() {
     );
 }
 
-// âœ… FIX: Render app directly without loading data.json
+// â FIX: Render app directly without loading data.json
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
-
-
 
