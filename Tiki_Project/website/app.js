@@ -1,5 +1,5 @@
-// ============================================================
-// ð TIKI ANALYST - FRONTEND (FIXED VERSION)
+﻿// ============================================================
+// 🚀 TIKI ANALYST - FRONTEND (FIXED VERSION)
 // ============================================================
 
 const { useState, useRef } = React;
@@ -19,7 +19,7 @@ const calculateKPI = (products) => {
         };
     }
 
-    // Parse numeric values safely from mixed locale strings (e.g. 2.542.605.000 VNÄ)
+    // Parse numeric values safely from mixed locale strings (e.g. 2.542.605.000 VNĐ)
     const parseLocaleInteger = (value) => {
         if (value === null || value === undefined) return 0;
         const digits = String(value).replace(/\D/g, '');
@@ -35,26 +35,26 @@ const calculateKPI = (products) => {
         return Number.isFinite(parsed) ? parsed : null;
     };
 
-    // TÃ­nh tá»ng doanh thu tá»« estimated_revenue
+    // Tính tổng doanh thu từ estimated_revenue
     const totalRevenue = products.reduce((sum, p) => {
         const revenue = parseLocaleInteger(p.rev);
         return sum + revenue;
     }, 0);
 
-    // TÃ­nh tá»ng sáº£n pháº©m bÃ¡n ra tá»« boughtInLastMonth
+    // Tính tổng sản phẩm bán ra từ boughtInLastMonth
     const totalSold = products.reduce((sum, p) => {
         const sold = parseLocaleInteger(p.sold);
         return sum + sold;
     }, 0);
 
-    // TÃ­nh giÃ¡ trung bÃ¬nh tá»« price
+    // Tính giá trung bình từ price
     const totalPrice = products.reduce((sum, p) => {
         const price = parseLocaleInteger(p.price);
         return sum + price;
     }, 0);
     const avgPrice = products.length > 0 ? totalPrice / products.length : 0;
 
-    // Æ¯u tiÃªn láº¥y tÄng trÆ°á»ng tháº­t tá»« backend náº¿u cÃ³; khÃ´ng tá»± bá»a cÃ´ng thá»©c tá»« sá» lÆ°á»£ng item.
+    // Ưu tiên lấy tăng trưởng thật từ backend nếu có; không tự bịa công thức từ số lượng item.
     const growthValues = products
         .map((p) => parseNumeric(p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth))
         .filter((v) => v !== null);
@@ -65,8 +65,8 @@ const calculateKPI = (products) => {
         const sign = avgGrowth > 0 ? '+' : '';
         growth = `${sign}${avgGrowth.toFixed(1)}%`;
     } else if (products.length > 0 && totalSold > 0) {
-        // Fallback: Tính growth dựa trên MEDIAN của search results
-        // Logic: So sánh avg sold per product với median của results → tự động scale
+        // Fallback: compute growth from the median of current search results.
+        // This keeps the metric self-scaling when the dataset changes.
         const soldValues = products
             .map((p) => parseLocaleInteger(p.sold))
             .filter((v) => v > 0)
@@ -94,7 +94,7 @@ const calculateKPI = (products) => {
 };
 
 // ============================================================
-// ð API CONFIGURATION & FUNCTIONS
+// 🛑 API CONFIGURATION & FUNCTIONS
 // ============================================================
 
 const resolveApiBaseUrl = () => {
@@ -117,16 +117,16 @@ const API_BASE_URL = resolveApiBaseUrl();
 const executeAnalysis = async (type, payload) => {
     try {
         if (!API_BASE_URL) {
-            throw new Error('ChÆ°a cáº¥u hÃ¬nh API_BASE_URL cho mÃ´i trÆ°á»ng deploy (GitHub Pages).');
+            throw new Error('Chưa cấu hình API_BASE_URL cho môi trường deploy (GitHub Pages).');
         }
 
         if (window.location.protocol === 'https:' && API_BASE_URL.startsWith('http://')) {
-            throw new Error('Trang Äang cháº¡y HTTPS nhÆ°ng API lÃ  HTTP (mixed content sáº½ bá» cháº·n).');
+            throw new Error('Trang đang chạy HTTPS nhưng API là HTTP (mixed content sẽ bị chặn).');
         }
 
         let response;
         if (type === 'single') {
-            // â FIX: DÃ¹ng API_BASE_URL thay vÃ¬ API_URL
+            // ✅ FIX: Dùng API_BASE_URL thay vì API_URL
             response = await fetch(`${API_BASE_URL}/api/search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -139,7 +139,7 @@ const executeAnalysis = async (type, payload) => {
         } else {
             const formData = new FormData();
             formData.append('file', payload.file);
-            // â FIX: DÃ¹ng API_BASE_URL thay vÃ¬ API_URL
+            // ✅ FIX: Dùng API_BASE_URL thay vì API_URL
             response = await fetch(`${API_BASE_URL}/api/analyze-batch`, {
                 method: 'POST',
                 body: formData
@@ -156,20 +156,20 @@ const executeAnalysis = async (type, payload) => {
             throw new Error(result.message || 'Unknown error');
         }
         
-        // â FIX: Response mapping ÄÃºng vá»i backend format
+        // ✅ FIX: Response mapping đúng với backend format
         return {
             products: result.data.products.map((p, idx) => ({
                 id: idx + 1,
                 product_id: p.product_id || '',
-                name: p.title || p.name || p.product_name || 'N/A',  // Backend tráº£ 'title'
-                cat: p.categoryName || p.category || p.category_name || 'N/A',  // Backend tráº£ 'categoryName'
-                price: `${(p.price || 0).toLocaleString()} VNÄ`,
-                sold: (p.boughtInLastMonth || p.quantity_sold || p.review_count || 0).toLocaleString(),  // Backend tráº£ 'boughtInLastMonth'
-                rev: (p.estimated_revenue || 0).toLocaleString() + ' VNÄ',  // Backend tráº£ 'estimated_revenue'
+                name: p.title || p.name || p.product_name || 'N/A',  // Backend trả 'title'
+                cat: p.categoryName || p.category || p.category_name || 'N/A',  // Backend trả 'categoryName'
+                price: `${(p.price || 0).toLocaleString()} VNĐ`,
+                sold: (p.boughtInLastMonth || p.quantity_sold || p.review_count || 0).toLocaleString(),  // Backend trả 'boughtInLastMonth'
+                rev: (p.estimated_revenue || 0).toLocaleString() + ' VNĐ',  // Backend trả 'estimated_revenue'
                 growth_percent: p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth ?? null,
                 url: p.product_url || p.url_path || (p.product_id ? `https://tiki.vn/p/${p.product_id}` : '')
             })),
-            insight: result.data.ai_insight || 'KhÃ´ng cÃ³ insight'
+            insight: result.data.ai_insight || 'Không có insight'
         };
     } catch (error) {
         console.error('API Error:', error);
@@ -179,7 +179,7 @@ const executeAnalysis = async (type, payload) => {
 
 const renderFormattedInsight = (insight) => {
     if (!insight) {
-        return <div className="text-sm text-gray-300">KhÃ´ng cÃ³ insight Äá» hiá»n thá».</div>;
+        return <div className="text-sm text-gray-300">Không có insight để hiển thị.</div>;
     }
 
     const blocks = insight.split(/\n{2,}/g).filter(Boolean);
@@ -187,7 +187,7 @@ const renderFormattedInsight = (insight) => {
     return blocks.map((block, index) => {
         const lines = block.split('\n').filter(Boolean);
         const firstLine = lines[0].trim();
-        const isHeading = /^(?:\*\*|##|###|ð¯|ð|ð¡|ð|ð°|â|ð¥)/.test(firstLine);
+        const isHeading = /^(?:\*\*|##|###|🎯|📈|💡|📊|💰|✅|🔥)/.test(firstLine);
 
         return (
             <div
@@ -219,7 +219,7 @@ const renderFormattedInsight = (insight) => {
                         const content = trimmed.replace(/^-\s+(.+)$/, '$1');
                         return (
                             <div key={lineIndex} className="flex gap-3 text-sm text-gray-200 leading-6">
-                                <span className="text-rose-400">â¢</span>
+                                <span className="text-rose-400">•</span>
                                 <span>{content}</span>
                             </div>
                         );
@@ -237,7 +237,7 @@ const renderFormattedInsight = (insight) => {
 };
 
 // ============================================================
-// â MAIN APP COMPONENT
+// ✅ MAIN APP COMPONENT
 // ============================================================
 
 function App() {
@@ -284,7 +284,7 @@ function App() {
             setTimeout(() => lucide.createIcons(), 100);
             
         } catch (error) {
-            const errorMsg = `â Lá»i káº¿t ná»i Backend:\n${error.message}\n\nVui lÃ²ng kiá»m tra:\n1. Backend ÄÃ£ cháº¡y chÆ°a? (python main.py)\n2. URL API ÄÃºng chÆ°a? (${API_BASE_URL || 'CHUA_CAU_HINH'})\n3. Náº¿u cháº¡y trÃªn GitHub Pages: API pháº£i lÃ  public URL (Render/Railway/Fly.io), khÃ´ng dÃ¹ng localhost\n4. Náº¿u web lÃ  HTTPS thÃ¬ API cÅ©ng pháº£i HTTPS\n5. CORS ÄÃ£ cáº¥u hÃ¬nh chÆ°a?`;
+            const errorMsg = `❌ Lỗi kết nối Backend:\n${error.message}\n\nVui lòng kiểm tra:\n1. Backend đã chạy chưa? (python main.py)\n2. URL API đúng chưa? (${API_BASE_URL || 'CHUA_CAU_HINH'})\n3. Nếu chạy trên GitHub Pages: API phải là public URL (Render/Railway/Fly.io), không dùng localhost\n4. Nếu web là HTTPS thì API cũng phải HTTPS\n5. CORS đã cấu hình chưa?`;
             
             if (type === 'single') {
                 setInsightSingle(errorMsg);
@@ -320,32 +320,32 @@ function App() {
 
         const pdfContent = `
             <div style="font-family: 'Arial', sans-serif; padding: 20px; background: white; color: black;">
-                <h1 style="color: #1e293b; margin-bottom: 5px;">BÃ¡o CÃ¡o PhÃ¢n TÃ­ch Thá» TrÆ°á»ng E-Commerce</h1>
+                <h1 style="color: #1e293b; margin-bottom: 5px;">Báo Cáo Phân Tích Thị Trường E-Commerce</h1>
                 <p style="color: #666; font-size: 14px; margin: 5px 0;">
-                    Nguá»n: ${isSingle ? `Tá»« khÃ³a: ${titleKeyword}` : `File: ${titleKeyword}`}
+                    Nguồn: ${isSingle ? `Từ khóa: ${titleKeyword}` : `File: ${titleKeyword}`}
                 </p>
                 <p style="color: #666; font-size: 14px; margin: 5px 0;">
-                    NgÃ y táº¡o: ${new Date().toLocaleDateString('vi-VN')}
+                    Ngày tạo: ${new Date().toLocaleDateString('vi-VN')}
                 </p>
                 
                 <h2 style="color: #1e293b; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #e11d48; padding-bottom: 10px;">
                     AI Insights
                 </h2>
                 <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; white-space: pre-wrap; font-family: monospace; font-size: 12px; line-height: 1.6;">
-                    ${(insightData || "KhÃ´ng cÃ³ dá»¯ liá»u.").replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                    ${(insightData || "Không có dữ liệu.").replace(/</g, '&lt;').replace(/>/g, '&gt;')}
                 </div>
                 
                 <h2 style="color: #1e293b; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #e11d48; padding-bottom: 10px;">
-                    Top Sáº£n Pháº©m
+                    Top Sản Phẩm
                 </h2>
                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                     <thead>
                         <tr style="background-color: #e11d48; color: white;">
                             <th style="border: 1px solid #ddd; padding: 10px; text-align: center;">STT</th>
-                            <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Sáº£n pháº©m</th>
-                            <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Danh má»¥c</th>
-                            <th style="border: 1px solid #ddd; padding: 10px; text-align: right;">GiÃ¡ bÃ¡n</th>
-                            <th style="border: 1px solid #ddd; padding: 10px; text-align: right;">ÄÃ£ bÃ¡n</th>
+                            <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Sản phẩm</th>
+                            <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Danh mục</th>
+                            <th style="border: 1px solid #ddd; padding: 10px; text-align: right;">Giá bán</th>
+                            <th style="border: 1px solid #ddd; padding: 10px; text-align: right;">Đã bán</th>
                             <th style="border: 1px solid #ddd; padding: 10px; text-align: right;">Doanh Thu</th>
                         </tr>
                     </thead>
@@ -392,10 +392,10 @@ function App() {
             {/* KPI CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {[
-                    { label: "Tá»ng Doanh Thu", val: kpi.revenue, icon: "dollar-sign", color: "text-green-400" },
-                    { label: "Sáº£n Pháº©m BÃ¡n Ra", val: kpi.sold, icon: "shopping-bag", color: "text-blue-400" },
-                    { label: "GiÃ¡ TB ÄÆ¡n HÃ ng", val: kpi.avg, icon: "tag", color: "text-purple-400" },
-                    { label: "TÄng TrÆ°á»ng", val: kpi.growth, icon: "trending-up", color: "text-rose-400" },
+                    { label: "Tổng Doanh Thu", val: kpi.revenue, icon: "dollar-sign", color: "text-green-400" },
+                    { label: "Sản Phẩm Bán Ra", val: kpi.sold, icon: "shopping-bag", color: "text-blue-400" },
+                    { label: "Giá TB Đơn Hàng", val: kpi.avg, icon: "tag", color: "text-purple-400" },
+                    { label: "Tăng Trưởng", val: kpi.growth, icon: "trending-up", color: "text-rose-400" },
                 ].map((item, idx) => (
                     <div key={idx} className="bg-[#1e293b] p-5 rounded-xl border border-gray-700 shadow-sm">
                         <div className="flex justify-between items-start mb-2">
@@ -417,7 +417,7 @@ function App() {
                         </div>
                         <div>
                             <h3 className="text-lg font-bold text-white">AI Smart Insights</h3>
-                            <p className="text-xs text-indigo-200">PhÃ¢n tÃ­ch tá»± Äá»ng bá»i Gemini AI</p>
+                            <p className="text-xs text-indigo-200">Phân tích tự động bởi Gemini AI</p>
                         </div>
                     </div>
                     <div className="bg-black/30 backdrop-blur-sm rounded-lg p-4 border border-white/10 text-sm leading-relaxed text-gray-200">
@@ -430,19 +430,19 @@ function App() {
             <div className="bg-[#1e293b] rounded-xl border border-gray-700 overflow-hidden shadow-lg">
                 <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-[#253042]">
                     <h3 className="font-bold text-white flex items-center gap-2">
-                        <Icon name="trophy" size={18} className="text-yellow-500"/> Top Sáº£n Pháº©m
+                        <Icon name="trophy" size={18} className="text-yellow-500"/> Top Sản Phẩm
                     </h3>
-                    <span className="text-xs text-gray-400">Dá»¯ liá»u tá»« Backend API</span>
+                    <span className="text-xs text-gray-400">Dữ liệu từ Backend API</span>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="text-xs text-gray-400 uppercase bg-[#1e293b] border-b border-gray-700">
                             <tr>
-                                <th className="px-6 py-3 w-12 text-center">Thá»© tá»±</th>
-                                <th className="px-6 py-3">Sáº£n pháº©m</th>
-                                <th className="px-6 py-3">Danh má»¥c</th>
-                                <th className="px-6 py-3 text-right">GiÃ¡ bÃ¡n</th>
-                                <th className="px-6 py-3 text-right">ÄÃ£ bÃ¡n</th>
+                                <th className="px-6 py-3 w-12 text-center">Thứ tự</th>
+                                <th className="px-6 py-3">Sản phẩm</th>
+                                <th className="px-6 py-3">Danh mục</th>
+                                <th className="px-6 py-3 text-right">Giá bán</th>
+                                <th className="px-6 py-3 text-right">Đã bán</th>
                                 <th className="px-6 py-3 text-right">Doanh Thu</th>
                                 <th className="px-6 py-3 text-center">Link</th>
                             </tr>
@@ -466,7 +466,7 @@ function App() {
                                         )}
                                     </td>
                                     <td className="px-6 py-4 font-medium text-white truncate max-w-[200px]" title={item.name}>
-                                        {isTop3 && <span className="text-rose-400 mr-1">ð</span>}
+                                        {isTop3 && <span className="text-rose-400 mr-1">🏆</span>}
                                         {item.name}
                                     </td>
                                     <td className="px-6 py-4">
@@ -516,13 +516,13 @@ function App() {
 
                 <nav className="flex-1 p-4 space-y-2">
                     <button onClick={() => setActiveTab('single')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'single' ? 'bg-rose-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-                        <Icon name="search" size={18} /> PhÃ¢n tÃ­ch ÄÆ¡n
+                        <Icon name="search" size={18} /> Phân tích đơn
                     </button>
                     <button onClick={() => setActiveTab('batch')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'batch' ? 'bg-rose-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-                        <Icon name="upload-cloud" size={18} /> PhÃ¢n tÃ­ch loáº¡t (CSV)
+                        <Icon name="upload-cloud" size={18} /> Phân tích loạt (CSV)
                     </button>
                     <div className="pt-4 mt-4 border-t border-gray-700">
-                        <p className="px-4 text-xs font-semibold text-gray-500 uppercase mb-2">Há» thá»ng</p>
+                        <p className="px-4 text-xs font-semibold text-gray-500 uppercase mb-2">Hệ thống</p>
                         <div className="px-4 py-2 text-sm text-gray-400 flex items-center gap-2">
                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> API: {API_BASE_URL}
                         </div>
@@ -533,7 +533,7 @@ function App() {
                 </nav>
                 
                 <div className="p-4 border-t border-gray-700 text-xs text-gray-500 text-center">
-                    v1.0.0 â¢ Tiki Project
+                    v1.0.0 • Tiki Project
                 </div>
             </div>
 
@@ -543,12 +543,12 @@ function App() {
                 {/* HEADER */}
                 <header className="h-16 bg-[#1e293b] border-b border-gray-700 flex items-center justify-between px-8 z-10">
                     <h2 className="text-xl font-bold text-white">
-                        {activeTab === 'single' ? 'PhÃ¢n tÃ­ch tá»« khÃ³a' : 'PhÃ¢n tÃ­ch dá»¯ liá»u CSV'}
+                        {activeTab === 'single' ? 'Phân tích từ khóa' : 'Phân tích dữ liệu CSV'}
                     </h2>
                     <div className="flex items-center gap-4">
                         {(resultSingle || resultBatch) && (
                             <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-blue-900/20">
-                                <Icon name="download" size={16} /> Xuáº¥t PDF
+                                <Icon name="download" size={16} /> Xuất PDF
                             </button>
                         )}
                         <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold border border-gray-600">
@@ -565,12 +565,12 @@ function App() {
                         <div className="max-w-4xl mx-auto mb-8">
                             <div className="glass-panel p-6 rounded-xl flex gap-4 items-end animate-fade-in">
                                 <div className="flex-1">
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Nháº­p tá»« khÃ³a sáº£n pháº©m</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Nhập từ khóa sản phẩm</label>
                                     <input 
                                         type="text" 
                                         value={keyword}
                                         onChange={(e) => setKeyword(e.target.value)}
-                                        placeholder="VÃ­ dá»¥: tai nghe bluetooth, laptop gaming..." 
+                                        placeholder="Ví dụ: tai nghe bluetooth, laptop gaming..." 
                                         className="w-full bg-[#0f172a] border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none transition-all"
                                         onKeyDown={(e) => e.key === 'Enter' && handleSingleExecute()}
                                     />
@@ -581,7 +581,7 @@ function App() {
                                     className="px-6 py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-bold rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-rose-900/20"
                                 >
                                     {loadingSingle ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="play" className="fill-current" />}
-                                    PhÃ¢n tÃ­ch
+                                    Phân tích
                                 </button>
                             </div>
                         </div>
@@ -600,10 +600,10 @@ function App() {
                                         <Icon name="upload-cloud" size={32} className="text-rose-500" />
                                     </div>
                                     <h3 className="text-lg font-bold text-white mb-1">
-                                        {selectedFile ? selectedFile.name : "Click Äá» táº£i lÃªn file CSV"}
+                                        {selectedFile ? selectedFile.name : "Click để tải lên file CSV"}
                                     </h3>
                                     <p className="text-sm text-gray-400">
-                                        {selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : "Há» trá»£ .csv (Max 50MB)"}
+                                        {selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : "Hỗ trợ .csv (Max 50MB)"}
                                     </p>
                                 </div>
                                 {selectedFile && (
@@ -614,7 +614,7 @@ function App() {
                                             className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-rose-900/20"
                                         >
                                             {loadingBatch ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="play" className="fill-current" />}
-                                            PhÃ¢n tÃ­ch File
+                                            Phân tích File
                                         </button>
                                     </div>
                                 )}
@@ -626,8 +626,8 @@ function App() {
                     {((activeTab === 'single' && loadingSingle) || (activeTab === 'batch' && loadingBatch)) && (
                         <div className="flex flex-col items-center justify-center py-20 text-rose-500 animate-pulse">
                             <Icon name="bot" size={48} className="mb-4" />
-                            <p className="text-lg font-medium">Äang gá»i Backend API...</p>
-                            <p className="text-sm text-gray-400">Vui lÃ²ng Äá»£i</p>
+                            <p className="text-lg font-medium">Đang gọi Backend API...</p>
+                            <p className="text-sm text-gray-400">Vui lòng đợi</p>
                         </div>
                     )}
 
@@ -643,8 +643,8 @@ function App() {
                             <Icon name="bar-chart-2" size={64} className="mb-4" />
                             <p className="text-lg">
                                 {activeTab === 'single' 
-                                    ? "Nháº­p tá»« khÃ³a Äá» báº¯t Äáº§u" 
-                                    : "Táº£i lÃªn CSV Äá» phÃ¢n tÃ­ch"}
+                                    ? "Nhập từ khóa để bắt đầu" 
+                                    : "Tải lên CSV để phân tích"}
                             </p>
                         </div>
                     )}
@@ -655,7 +655,8 @@ function App() {
     );
 }
 
-// â FIX: Render app directly without loading data.json
+// ✅ FIX: Render app directly without loading data.json
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
+
 

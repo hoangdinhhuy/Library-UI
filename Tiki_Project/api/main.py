@@ -10,8 +10,8 @@ import time
 import logging
 from datetime import datetime
 import io
+import pandas as pd
 
-from rag_engine import RAGEngine
 from data_loader import DataLoader
 from model_loader import ModelLoader
 from search_engine_v2 import SearchEngine
@@ -43,7 +43,7 @@ app.add_middleware(
 )
 
 # Global instances
-rag_engine: Optional[RAGEngine] = None
+rag_engine: Optional[Any] = None
 data_loader: Optional[DataLoader] = None
 model_loader: Optional[ModelLoader] = None
 search_engine: Optional[SearchEngine] = None
@@ -81,14 +81,20 @@ async def startup_event():
     logger.info("🚀 Starting Tiki RAG API...")
     
     try:
-        # 1. Initialize RAG engine first so chromadb / onnxruntime load before pandas
+        # 1. Initialize RAG engine (optional). If onnx/chromadb fails, continue without semantic RAG.
         logger.info("🧠 Initializing RAG engine...")
-        rag_engine = RAGEngine(
-            gemini_api_key=settings.GEMINI_API_KEY,
-            chroma_db_path=settings.CHROMA_DB_PATH,
-            embedding_model_name=settings.EMBEDDING_MODEL
-        )
-        
+        rag_engine = None
+        try:
+            from rag_engine import RAGEngine
+            rag_engine = RAGEngine(
+                gemini_api_key=settings.GEMINI_API_KEY,
+                chroma_db_path=settings.CHROMA_DB_PATH,
+                embedding_model_name=settings.EMBEDDING_MODEL
+            )
+            logger.info("✅ RAG engine ready")
+        except Exception as rag_error:
+            logger.warning(f"⚠️ RAG disabled due to dependency/runtime issue: {rag_error}")
+
         # 2. Load data files
         logger.info("📥 Loading data...")
         data_loader = DataLoader(data_dir=settings.DATA_PATH)
@@ -103,7 +109,7 @@ async def startup_event():
             data_loader=data_loader,
             model_loader=model_loader,
             rag_engine=rag_engine,
-            gemini_model=rag_engine.model
+            gemini_model=rag_engine.model if rag_engine else None
         )
         
         logger.info("✅ API Ready!")
@@ -218,14 +224,26 @@ async def analyze_batch(
     try:
         logger.info(f"📂 Batch analysis request: {file.filename}")
         
-        # Read CSV file
+        # Read CSV or Excel file
         contents = await file.read()
-        df = pd.read_csv(io.BytesIO(contents))
+        filename = (file.filename or '').lower()
+
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+            try:
+                df = pd.read_excel(io.BytesIO(contents))
+            except ImportError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Excel support requires 'openpyxl'. Please upload CSV or install openpyxl."
+                ) from exc
+        else:
+            # Default to CSV to keep backward compatibility with current UI.
+            df = pd.read_csv(io.BytesIO(contents))
         
         if 'keyword' not in df.columns:
             raise HTTPException(
                 status_code=400,
-                detail="CSV must have 'keyword' column"
+                detail="File must have a 'keyword' column"
             )
         
         keywords = df['keyword'].dropna().astype(str).tolist()
