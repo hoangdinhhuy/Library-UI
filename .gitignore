@@ -1,0 +1,3 @@
+
+# Exclude oversized model file for GitHub push
+Tiki_Project/Tiki_Project/module/Phobert_model/model.safetensors
