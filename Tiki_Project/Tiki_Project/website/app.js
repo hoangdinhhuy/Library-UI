@@ -60,11 +60,33 @@ const calculateKPI = (products) => {
 // 🛑 API CONFIGURATION & FUNCTIONS
 // ============================================================
 
-// ✅ CHANGE THIS URL TO YOUR ACTUAL BACKEND URL
-const API_BASE_URL = 'http://localhost:8000';  // ✅ Variable name đúng
+const resolveApiBaseUrl = () => {
+    const configured = (window.__API_BASE_URL__ || '').trim();
+    if (configured) {
+        return configured.replace(/\/+$/, '');
+    }
+
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+        return 'http://localhost:8000';
+    }
+
+    // GitHub Pages/static hosting must point to a public backend (prefer HTTPS)
+    return '';
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const executeAnalysis = async (type, payload) => {
     try {
+        if (!API_BASE_URL) {
+            throw new Error('Chưa cấu hình API_BASE_URL cho môi trường deploy (GitHub Pages).');
+        }
+
+        if (window.location.protocol === 'https:' && API_BASE_URL.startsWith('http://')) {
+            throw new Error('Trang đang chạy HTTPS nhưng API là HTTP (mixed content sẽ bị chặn).');
+        }
+
         let response;
         if (type === 'single') {
             // ✅ FIX: Dùng API_BASE_URL thay vì API_URL
@@ -224,7 +246,7 @@ function App() {
             setTimeout(() => lucide.createIcons(), 100);
             
         } catch (error) {
-            const errorMsg = `❌ Lỗi kết nối Backend:\n${error.message}\n\nVui lòng kiểm tra:\n1. Backend đã chạy chưa? (python main.py)\n2. URL API đúng chưa? (${API_BASE_URL})\n3. CORS đã cấu hình chưa?`;
+            const errorMsg = `❌ Lỗi kết nối Backend:\n${error.message}\n\nVui lòng kiểm tra:\n1. Backend đã chạy chưa? (python main.py)\n2. URL API đúng chưa? (${API_BASE_URL || 'CHUA_CAU_HINH'})\n3. Nếu chạy trên GitHub Pages: API phải là public URL (Render/Railway/Fly.io), không dùng localhost\n4. Nếu web là HTTPS thì API cũng phải HTTPS\n5. CORS đã cấu hình chưa?`;
             
             if (type === 'single') {
                 setInsightSingle(errorMsg);

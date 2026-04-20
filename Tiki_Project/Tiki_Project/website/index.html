@@ -46,6 +46,12 @@
 <body>
     <div id="root"></div>
 
+    <script>
+        // Set your public backend URL when deploying static frontend (GitHub Pages).
+        // Example: window.__API_BASE_URL__ = 'https://your-backend.onrender.com';
+        window.__API_BASE_URL__ = window.__API_BASE_URL__ || '';
+    </script>
+
     <!-- Import external app.js with React application logic -->
     <script src="app.js" type="text/babel"></script>
 </body>
