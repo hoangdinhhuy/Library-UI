@@ -10,6 +10,7 @@ import time
 import logging
 from datetime import datetime
 import io
+from io import StringIO
 import pandas as pd
 
 from data_loader import DataLoader
@@ -238,7 +239,29 @@ async def analyze_batch(
                 ) from exc
         else:
             # Default to CSV to keep backward compatibility with current UI.
-            df = pd.read_csv(io.BytesIO(contents))
+            # Try common encodings used by Excel/Windows exports so Vietnamese text is preserved.
+            csv_text = None
+            last_error = None
+            for encoding in ('utf-8-sig', 'utf-8', 'cp1258', 'cp1252', 'latin1'):
+                try:
+                    csv_text = contents.decode(encoding)
+                    break
+                except UnicodeDecodeError as exc:
+                    last_error = exc
+
+            if csv_text is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Could not decode CSV file. Please save it as UTF-8 CSV. Details: {last_error}"
+                )
+
+            try:
+                df = pd.read_csv(StringIO(csv_text))
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid CSV format: {exc}"
+                ) from exc
         
         if 'keyword' not in df.columns:
             raise HTTPException(
