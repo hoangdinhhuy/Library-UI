@@ -15,7 +15,7 @@ const calculateKPI = (products) => {
             revenue: "$0",
             sold: "0",
             avg: "$0",
-            growth: "0%"
+            growth: "N/A"
         };
     }
 
@@ -24,6 +24,15 @@ const calculateKPI = (products) => {
         if (value === null || value === undefined) return 0;
         const digits = String(value).replace(/\D/g, '');
         return digits ? parseInt(digits, 10) : 0;
+    };
+
+    const parseNumeric = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+        const normalized = String(value).replace(/,/g, '.').replace(/[^\d.-]/g, '');
+        if (!normalized) return null;
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
     };
 
     // Tính tổng doanh thu từ estimated_revenue
@@ -45,14 +54,23 @@ const calculateKPI = (products) => {
     }, 0);
     const avgPrice = products.length > 0 ? totalPrice / products.length : 0;
 
-    // Tính growth (số lượng sản phẩm so với top 10)
-    const growth = ((products.length / 10) * 100).toFixed(1);
+    // Ưu tiên lấy tăng trưởng thật từ backend nếu có; không tự bịa công thức từ số lượng item.
+    const growthValues = products
+        .map((p) => parseNumeric(p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth))
+        .filter((v) => v !== null);
+
+    let growth = 'N/A';
+    if (growthValues.length > 0) {
+        const avgGrowth = growthValues.reduce((sum, v) => sum + v, 0) / growthValues.length;
+        const sign = avgGrowth > 0 ? '+' : '';
+        growth = `${sign}${avgGrowth.toFixed(1)}%`;
+    }
 
     return {
         revenue: totalRevenue > 0 ? `$${(totalRevenue / 1000000).toFixed(2)}M` : "$0",
         sold: totalSold.toLocaleString(),
         avg: `$${avgPrice.toFixed(2)}`,
-        growth: `+${growth}%`
+        growth
     };
 };
 
@@ -129,6 +147,7 @@ const executeAnalysis = async (type, payload) => {
                 price: `${(p.price || 0).toLocaleString()} VNĐ`,
                 sold: (p.boughtInLastMonth || p.quantity_sold || p.review_count || 0).toLocaleString(),  // Backend trả 'boughtInLastMonth'
                 rev: (p.estimated_revenue || 0).toLocaleString() + ' VNĐ',  // Backend trả 'estimated_revenue'
+                growth_percent: p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth ?? null,
                 url: p.product_url || p.url_path || (p.product_id ? `https://tiki.vn/p/${p.product_id}` : '')
             })),
             insight: result.data.ai_insight || 'Không có insight'
