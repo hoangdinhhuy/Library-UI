@@ -45,14 +45,34 @@ const calculateKPI = (products) => {
     }, 0);
     const avgPrice = products.length > 0 ? totalPrice / products.length : 0;
 
-    // Tính growth (số lượng sản phẩm so với top 10)
-    const growth = ((products.length / 10) * 100).toFixed(1);
+    // Tính tăng trưởng dựa trên chênh lệch sức bán giữa nhóm đầu và nhóm sau
+    const soldValues = products
+        .map((p) => parseLocaleInteger(p.sold))
+        .filter((v) => Number.isFinite(v));
+
+    let growthLabel = 'N/A';
+    if (soldValues.length >= 2) {
+        const mid = Math.floor(soldValues.length / 2);
+        const topGroup = soldValues.slice(0, mid);
+        const restGroup = soldValues.slice(mid);
+
+        const avgTop = topGroup.reduce((sum, v) => sum + v, 0) / Math.max(topGroup.length, 1);
+        const avgRest = restGroup.reduce((sum, v) => sum + v, 0) / Math.max(restGroup.length, 1);
+
+        if (avgRest > 0) {
+            const growth = ((avgTop - avgRest) / avgRest) * 100;
+            const sign = growth >= 0 ? '+' : '';
+            growthLabel = `${sign}${growth.toFixed(1)}%`;
+        } else {
+            growthLabel = avgTop > 0 ? '+100.0%' : '0.0%';
+        }
+    }
 
     return {
         revenue: totalRevenue > 0 ? `$${(totalRevenue / 1000000).toFixed(2)}M` : "$0",
         sold: totalSold.toLocaleString(),
         avg: `$${avgPrice.toFixed(2)}`,
-        growth: `+${growth}%`
+        growth: growthLabel
     };
 };
 
@@ -60,10 +80,27 @@ const calculateKPI = (products) => {
 // 🛑 API CONFIGURATION & FUNCTIONS
 // ============================================================
 
+const normalizeApiBaseUrl = (value) => {
+    const normalized = (value || '').trim().replace(/\/+$/, '');
+    return normalized;
+};
+
 const resolveApiBaseUrl = () => {
+    const queryApi = new URLSearchParams(window.location.search).get('api');
+    if (queryApi) {
+        const normalizedQuery = normalizeApiBaseUrl(queryApi);
+        localStorage.setItem('TIKI_API_BASE_URL', normalizedQuery);
+        return normalizedQuery;
+    }
+
     const configured = (window.__API_BASE_URL__ || '').trim();
     if (configured) {
-        return configured.replace(/\/+$/, '');
+        return normalizeApiBaseUrl(configured);
+    }
+
+    const stored = localStorage.getItem('TIKI_API_BASE_URL');
+    if (stored) {
+        return normalizeApiBaseUrl(stored);
     }
 
     const host = window.location.hostname;
@@ -75,10 +112,22 @@ const resolveApiBaseUrl = () => {
     return '';
 };
 
-const API_BASE_URL = resolveApiBaseUrl();
+let API_BASE_URL = resolveApiBaseUrl();
 
 const executeAnalysis = async (type, payload) => {
     try {
+        if (!API_BASE_URL) {
+            const inputApi = window.prompt(
+                'Nhập URL backend API (HTTPS), ví dụ: https://your-api.onrender.com',
+                'https://'
+            );
+
+            API_BASE_URL = normalizeApiBaseUrl(inputApi || '');
+            if (API_BASE_URL) {
+                localStorage.setItem('TIKI_API_BASE_URL', API_BASE_URL);
+            }
+        }
+
         if (!API_BASE_URL) {
             throw new Error('Chưa cấu hình API_BASE_URL cho môi trường deploy (GitHub Pages).');
         }
