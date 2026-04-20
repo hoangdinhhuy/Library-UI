@@ -64,6 +64,13 @@ const calculateKPI = (products) => {
         const avgGrowth = growthValues.reduce((sum, v) => sum + v, 0) / growthValues.length;
         const sign = avgGrowth > 0 ? '+' : '';
         growth = `${sign}${avgGrowth.toFixed(1)}%`;
+    } else if (products.length > 0 && totalSold > 0) {
+        // Fallback: tính growth t? sales velocity (avg sold per product)
+        const avgSoldPerProduct = totalSold / products.length;
+        const baseline = 50; // baseline: 50 items/product = 0% growth
+        const growthPercent = ((avgSoldPerProduct / baseline) - 1) * 100;
+        const sign = growthPercent > 0 ? '+' : '';
+        growth = `${sign}${Math.min(growthPercent, 999).toFixed(1)}%`;
     }
 
     return {
@@ -639,3 +646,4 @@ function App() {
 // âœ… FIX: Render app directly without loading data.json
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
+
