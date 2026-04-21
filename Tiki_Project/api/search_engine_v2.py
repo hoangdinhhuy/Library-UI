@@ -9,6 +9,15 @@ import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
+from context_detection import (
+    detectContext,
+    groupByContext,
+    getSuggestedContexts,
+    getContextLabel,
+    pick_primary_context,
+    filter_by_context,
+)
+
 class SearchEngine:
     """
     Product search engine with ENHANCED AI-powered insights
@@ -59,6 +68,36 @@ class SearchEngine:
                 logger.warning(f"Semantic search failed: {e}")
         
         return self.data_loader.search_products(keyword, limit)
+
+    def analyze_contexts(
+        self,
+        keyword: str,
+        products: List[Dict[str, Any]],
+        selected_context: str | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Detect contexts, pick primary context, and return filtered products + suggestions.
+        """
+        grouped = groupByContext(products or [], keyword=keyword)
+        primary = pick_primary_context(grouped)
+        chosen = selected_context or primary
+        filtered = filter_by_context(products or [], keyword=keyword, context_id=chosen)
+        suggestions = getSuggestedContexts(
+            keyword=keyword,
+            grouped=grouped,
+            selected_context=chosen,
+            max_suggestions=6,
+        )
+        context_counts = {k: len(v) for k, v in grouped.items()}
+        return {
+            "primary_context": primary,
+            "selected_context": chosen,
+            "primary_context_label": getContextLabel(keyword, primary),
+            "selected_context_label": getContextLabel(keyword, chosen),
+            "context_counts": context_counts,
+            "filtered_products": filtered,
+            "suggestions": suggestions,
+        }
     
     def generate_insight(
         self,

@@ -93,7 +93,13 @@ const executeAnalysis = async (type, payload) => {
             response = await fetch(`${API_BASE_URL}/api/search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ keyword: payload.keyword, market: 'US', limit: 9999, display_limit: 20 })
+                body: JSON.stringify({
+                    keyword: payload.keyword,
+                    market: 'US',
+                    limit: 9999,
+                    display_limit: 20,
+                    context_id: payload.context_id || null,
+                })
             });
         } else {
             const formData = new FormData();
@@ -120,7 +126,8 @@ const executeAnalysis = async (type, payload) => {
                 growth_percent: p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth ?? null,
                 url: p.product_url || p.url_path || (p.product_id ? `https://tiki.vn/p/${p.product_id}` : '')
             })),
-            insight: result.data.ai_insight || 'Không có insight'
+            insight: result.data.ai_insight || 'Không có insight',
+            context: result.data.context || null,
         };
     } catch (error) {
         console.error('API Error:', error);

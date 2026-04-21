@@ -55,6 +55,7 @@ class SearchRequest(BaseModel):
     market: str = Field(default="US")
     limit: int = Field(default=9999, ge=1) 
     display_limit: int = Field(default=20, ge=1)
+    context_id: Optional[str] = Field(default=None, max_length=50)
 
 class Product(BaseModel):
     product_id: str
@@ -128,6 +129,7 @@ def get_search_engine() -> SearchEngine:
 
 class MarketReportRequest(BaseModel):
     keyword: str = Field(..., min_length=1, max_length=200)
+    context_id: Optional[str] = Field(default=None, max_length=50)
 
 @app.post("/api/market-report")
 async def market_report(
@@ -137,7 +139,20 @@ async def market_report(
     try:
         logger.info(f"📊 Market report request: '{request.keyword}'")
         all_products = engine.search_products(keyword=request.keyword, limit=9999, use_semantic=True)
-        report = engine.generate_market_report(keyword=request.keyword, products=all_products)
+        ctx = engine.analyze_contexts(keyword=request.keyword, products=all_products, selected_context=request.context_id)
+        filtered = ctx["filtered_products"]
+
+        report = engine.generate_market_report(keyword=request.keyword, products=filtered)
+        report["context"] = {
+            "primary_context": ctx["primary_context"],
+            "selected_context": ctx["selected_context"],
+            "primary_context_label": ctx.get("primary_context_label"),
+            "selected_context_label": ctx.get("selected_context_label"),
+            "context_counts": ctx["context_counts"],
+            "suggestions": ctx["suggestions"],
+            "total_found_before_filter": len(all_products),
+            "total_found_after_filter": len(filtered),
+        }
         return {"success": True, "data": report}
     except Exception as e:
         logger.error(f"Market report failed: {e}")
@@ -290,14 +305,32 @@ async def search_products(
             use_semantic=True
         )
 
-        # Bước 2: Insight phân tích từ TOÀN BỘ sản phẩm
-        ai_insight = engine.generate_insight(products=all_products, keyword=request.keyword, include_ml_insights=True)
+        # Bước 2: Detect context + filter dataset (no crawl; re-analyze on existing dataset)
+        ctx = engine.analyze_contexts(
+            keyword=request.keyword,
+            products=all_products,
+            selected_context=request.context_id,
+        )
+        filtered = ctx["filtered_products"]
 
-        # Bước 3: Chỉ trả về display_limit sản phẩm cho UI
+        # Bước 3: Insight phân tích từ sản phẩm ĐÚNG NGỮ CẢNH (primary/selected)
+        ai_insight = engine.generate_insight(products=filtered, keyword=request.keyword, include_ml_insights=True)
+
+        # Bước 4: Chỉ trả về display_limit sản phẩm cho UI
         return SearchResponse(success=True,data={
-            "products": all_products[:request.display_limit],  # = 20 hiển thị
+            "products": filtered[:request.display_limit],  # = 20 hiển thị (đúng ngữ cảnh)
             "ai_insight": ai_insight,
-            "total_found": len(all_products)   # số thực tế (ví dụ 200)
+            "total_found": len(filtered),   # số thực tế (đúng ngữ cảnh)
+            "context": {
+                "primary_context": ctx["primary_context"],
+                "selected_context": ctx["selected_context"],
+                "primary_context_label": ctx.get("primary_context_label"),
+                "selected_context_label": ctx.get("selected_context_label"),
+                "context_counts": ctx["context_counts"],
+                "suggestions": ctx["suggestions"],
+                "total_found_before_filter": len(all_products),
+                "total_found_after_filter": len(filtered),
+            },
         })
         
     except Exception as e:

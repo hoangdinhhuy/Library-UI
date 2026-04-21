@@ -9,6 +9,7 @@ function SinglePage() {
     const [loading,      setLoading]      = useState(false);
     const [result,       setResult]       = useState(null);
     const [insight,      setInsight]      = useState('');
+    const [contextInfo,  setContextInfo]  = useState(null);
 
     useEffect(() => {
         lucide.createIcons();
@@ -19,10 +20,12 @@ function SinglePage() {
         setLoading(true);
         setResult(null);
         setInsight('');
+        setContextInfo(null);
         try {
-            const data = await executeAnalysis('single', { keyword });
+            const data = await executeAnalysis('single', { keyword, context_id: null });
             setResult(data.products);
             setInsight(data.insight);
+            setContextInfo(data.context);
         } catch (error) {
             setInsight(
                 `❌ Lỗi kết nối Backend:\n${error.message}\n\nVui lòng kiểm tra:\n` +
@@ -32,6 +35,24 @@ function SinglePage() {
                 `4. Nếu web là HTTPS thì API cũng phải HTTPS\n` +
                 `5. CORS đã cấu hình chưa?`
             );
+        } finally {
+            setLoading(false);
+            setTimeout(() => lucide.createIcons(), 100);
+        }
+    };
+
+    const handleSelectContext = async (nextContextId) => {
+        if (!keyword.trim()) return;
+        setLoading(true);
+        setResult(null);
+        setInsight('');
+        try {
+            const data = await executeAnalysis('single', { keyword, context_id: nextContextId });
+            setResult(data.products);
+            setInsight(data.insight);
+            setContextInfo(data.context);
+        } catch (error) {
+            setInsight(`❌ Lỗi phân tích lại: ${error.message}`);
         } finally {
             setLoading(false);
             setTimeout(() => lucide.createIcons(), 100);
@@ -101,6 +122,45 @@ function SinglePage() {
 
             {/* RESULTS */}
             {!loading && result && renderResult(result, insight)}
+
+            {/* CONTEXT SUGGESTIONS */}
+            {!loading && result && contextInfo && (
+                <div className="max-w-6xl mx-auto mt-6">
+                    <div className="bg-[#1e293b] rounded-xl border border-gray-700 p-5">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <Icon name="sparkles" size={18} className="text-cyan-400"/> Bạn có đang tìm kiếm...?
+                            </h3>
+                            {contextInfo.selected_context && (
+                                <span className="text-xs text-gray-400">
+                                    Ngữ cảnh đang chọn: <span className="text-cyan-300 font-semibold">{contextInfo.selected_context_label || contextInfo.selected_context}</span>
+                                </span>
+                            )}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            <span className="px-3 py-1.5 rounded-full text-xs font-semibold border bg-cyan-700 text-white border-cyan-400">
+                                {contextInfo.selected_context_label || contextInfo.selected_context}
+                            </span>
+                            {contextInfo.suggestions && contextInfo.suggestions.map((s) => (
+                                <button
+                                    key={s.context_id}
+                                    onClick={() => handleSelectContext(s.context_id)}
+                                    disabled={loading}
+                                    className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-[#0f172a] text-gray-200 border-gray-600 hover:border-cyan-500 hover:text-cyan-200"
+                                    title={`${s.count} sản phẩm`}
+                                >
+                                    {s.label} <span className="opacity-70">({s.count})</span>
+                                </button>
+                            ))}
+                        </div>
+                        {contextInfo.total_found_before_filter !== undefined && (
+                            <div className="mt-3 text-xs text-gray-500">
+                                Lọc theo ngữ cảnh: {contextInfo.total_found_after_filter?.toLocaleString?.('vi-VN') || contextInfo.total_found_after_filter} / {contextInfo.total_found_before_filter.toLocaleString('vi-VN')} sản phẩm
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* EMPTY STATE */}
             {!loading && !result && (

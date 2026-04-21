@@ -8,31 +8,45 @@ function MarketReportPage() {
     const [marketKeyword,       setMarketKeyword]       = useState('');
     const [loading,             setLoading]             = useState(false);
     const [result,              setResult]              = useState(null);
+    const [selectedContextId,   setSelectedContextId]   = useState(null);
 
     useEffect(() => {
         lucide.createIcons();
     }, [result]);
 
-    const handleMarketReport = async () => {
-        if (!marketKeyword.trim()) return;
+    const runMarketReport = async ({ keyword, context_id }) => {
         setLoading(true);
         setResult(null);
         try {
             const res = await fetch(`${API_BASE_URL}/api/market-report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ keyword: marketKeyword.trim() })
+                body: JSON.stringify({ keyword: keyword.trim(), context_id: context_id || null })
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const json = await res.json();
             if (!json.success) throw new Error(json.detail || 'Error');
             setResult(json.data);
+            const ctx = json.data?.context;
+            setSelectedContextId(ctx?.selected_context || null);
         } catch (e) {
             setResult({ error: e.message });
         } finally {
             setLoading(false);
             setTimeout(() => lucide.createIcons(), 100);
         }
+    };
+
+    const handleMarketReport = async () => {
+        if (!marketKeyword.trim()) return;
+        setSelectedContextId(null);
+        return runMarketReport({ keyword: marketKeyword, context_id: null });
+    };
+
+    const handleSelectContext = async (nextContextId) => {
+        if (!marketKeyword.trim()) return;
+        setSelectedContextId(nextContextId);
+        return runMarketReport({ keyword: marketKeyword, context_id: nextContextId });
     };
 
     return (
@@ -84,8 +98,50 @@ function MarketReportPage() {
                 const seg = d.price_segments;
                 const trend = d.price_trend;
                 const sent  = d.sentiment;
+                const ctx = d.context;
                 return (
                     <div className="space-y-6 animate-fade-in">
+
+                        {/* CONTEXT SUGGESTIONS */}
+                        {ctx && (
+                            <div className="bg-[#1e293b] rounded-xl border border-gray-700 p-5">
+                                <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <h3 className="font-bold text-white flex items-center gap-2">
+                                        <Icon name="sparkles" size={18} className="text-cyan-400"/> Bạn có đang tìm kiếm...?
+                                    </h3>
+                                    {ctx.selected_context && (
+                                        <span className="text-xs text-gray-400">
+                                            Ngữ cảnh đang chọn: <span className="text-cyan-300 font-semibold">{ctx.selected_context_label || ctx.selected_context}</span>
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    {ctx.selected_context && (
+                                        <span className="px-3 py-1.5 rounded-full text-xs font-semibold border bg-cyan-700 text-white border-cyan-400">
+                                            {ctx.selected_context_label || ctx.selected_context}
+                                        </span>
+                                    )}
+                                    {ctx.suggestions && ctx.suggestions.map((s) => (
+                                        <button
+                                            key={s.context_id}
+                                            onClick={() => handleSelectContext(s.context_id)}
+                                            disabled={loading}
+                                            className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-[#0f172a] text-gray-200 border-gray-600 hover:border-cyan-500 hover:text-cyan-200"
+                                            title={`${s.count} sản phẩm`}
+                                        >
+                                            {s.label} <span className="opacity-70">({s.count})</span>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {ctx.total_found_before_filter !== undefined && (
+                                    <div className="mt-3 text-xs text-gray-500">
+                                        Lọc theo ngữ cảnh: {(ctx.total_found_after_filter ?? 0).toLocaleString('vi-VN')} / {(ctx.total_found_before_filter ?? 0).toLocaleString('vi-VN')} sản phẩm
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* KPI Cards */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
