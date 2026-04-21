@@ -250,12 +250,153 @@ const renderFormattedInsight = (insight) => {
     });
 };
 
+const normalizeBotText = (value) =>
+    String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+const parseFlexibleNumber = (value) => {
+    if (value === null || value === undefined || value === '') return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const normalized = String(value).replace(/,/g, '.').replace(/[^\d.-]/g, '');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCompactMoney = (value) => {
+    if (!value || value <= 0) return '0 VNĐ';
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M VNĐ`;
+    if (value >= 1000) return `${(value / 1000).toFixed(0)}K VNĐ`;
+    return `${value.toLocaleString()} VNĐ`;
+};
+
+const extractBudgetFromText = (text) => {
+    const normalized = normalizeBotText(text);
+    const budgetMatch = normalized.match(/(\d+(?:[\.,]\d+)?)\s*(trieu|tr|k|nghin|ngan|m|million)/);
+
+    if (!budgetMatch) return 0;
+
+    const amount = parseFloat(budgetMatch[1].replace(',', '.'));
+    const unit = budgetMatch[2];
+
+    if (['trieu', 'tr', 'm', 'million'].includes(unit)) return amount * 1000000;
+    if (['k', 'nghin', 'ngan'].includes(unit)) return amount * 1000;
+    return amount;
+};
+
+const buildProductMetrics = (products = []) => {
+    return products.map((product) => {
+        const sold = parseFlexibleNumber(product.sold);
+        const revenue = parseFlexibleNumber(product.rev);
+        const price = parseFlexibleNumber(product.price);
+        const rating = parseFlexibleNumber(product.rating);
+
+        return {
+            ...product,
+            soldValue: sold,
+            revenueValue: revenue,
+            priceValue: price,
+            ratingValue: rating,
+        };
+    });
+};
+
+const buildChatAdvice = ({ message, products, keyword, insight }) => {
+    const normalized = normalizeBotText(message);
+    const metrics = buildProductMetrics(products);
+
+    if (!metrics.length) {
+        return `Chưa có dữ liệu sản phẩm để tư vấn cho "${keyword || 'dữ liệu hiện tại'}". Hãy phân tích 1 từ khóa hoặc tải CSV trước, rồi tôi sẽ gợi ý mặt hàng tiềm năng, ít cạnh tranh và phù hợp vốn.`;
+    }
+
+    const categoryMap = new Map();
+    metrics.forEach((item) => {
+        const category = item.cat || 'khac';
+        const current = categoryMap.get(category) || { count: 0, sold: 0, rating: 0 };
+        current.count += 1;
+        current.sold += item.soldValue;
+        current.rating += item.ratingValue || 0;
+        categoryMap.set(category, current);
+    });
+
+    const categories = Array.from(categoryMap.entries()).map(([name, data]) => ({
+        name,
+        ...data,
+        avgRating: data.count > 0 ? data.rating / data.count : 0,
+    }));
+
+    const pickBest = (list, scoreFn, limit = 3) =>
+        [...list]
+            .sort((a, b) => scoreFn(b) - scoreFn(a))
+            .slice(0, limit);
+
+    const topSell = pickBest(metrics, (item) => (item.soldValue * 0.7) + (item.ratingValue * 10000) + (item.revenueValue / 100000), 3);
+    const topValue = pickBest(metrics, (item) => (item.revenueValue / 1000000) + (item.ratingValue * 20) - (item.priceValue / 100000), 3);
+    const nicheCategories = [...categories]
+        .filter((cat) => cat.count <= 2)
+        .sort((a, b) => (b.avgRating - a.avgRating) || (a.count - b.count));
+
+    const budget = extractBudgetFromText(normalized);
+
+    const topSellText = topSell
+        .map((item, index) => `${index + 1}. ${item.name} | bán ${item.soldValue.toLocaleString()} | rating ${item.ratingValue.toFixed(1)}/5 | giá ${item.price}`)
+        .join('\n');
+
+    const topValueText = topValue
+        .map((item, index) => `${index + 1}. ${item.name} | doanh thu ${formatCompactMoney(item.revenueValue)} | bán ${item.soldValue.toLocaleString()} | giá ${item.price}`)
+        .join('\n');
+
+    const nicheText = nicheCategories.length
+        ? nicheCategories
+            .slice(0, 3)
+            .map((cat, index) => `${index + 1}. ${cat.name} | ${cat.count} sản phẩm | rating TB ${cat.avgRating.toFixed(1)}/5`)
+            .join('\n')
+        : 'Chưa thấy ngách nhỏ rõ ràng trong tập dữ liệu này, nên ưu tiên nhóm có rating cao và lượng bán ổn định.';
+
+    if (normalized.includes('von') || normalized.includes('ngan sach') || normalized.includes('budget')) {
+        if (budget > 0) {
+            const affordable = metrics
+                .filter((item) => item.priceValue <= budget)
+                .sort((a, b) => (b.ratingValue + b.soldValue / 100000) - (a.ratingValue + a.soldValue / 100000))
+                .slice(0, 3);
+
+            if (affordable.length) {
+                return `Với vốn khoảng ${formatCompactMoney(budget)}, tôi ưu tiên 3 mặt hàng sau:\n${affordable.map((item, index) => `${index + 1}. ${item.name} | giá ${item.price} | bán ${item.soldValue.toLocaleString()} | rating ${item.ratingValue.toFixed(1)}/5`).join('\n')}\n\nLý do: giá phù hợp vốn, rating tốt và có sức bán trong nhóm đang xem.`;
+            }
+        }
+
+        return `Nếu ưu tiên vốn thấp, hãy chọn nhóm có giá thấp hơn giá trung bình (${metrics.reduce((sum, item) => sum + item.priceValue, 0) / metrics.length} VND) và rating từ 4.5 trở lên. Trong dữ liệu hiện tại, 3 sản phẩm bán tốt nhất là:\n${topSellText}`;
+    }
+
+    if (normalized.includes('it canh tranh') || normalized.includes('ngach') || normalized.includes('niche')) {
+        return `Gợi ý ngách ít cạnh tranh trong dữ liệu hiện tại:\n${nicheText}\n\nKhi chọn ngách, ưu tiên: ít sản phẩm cùng category + rating trung bình cao + có sản phẩm bán ra ổn định.`;
+    }
+
+    if (normalized.includes('loi nhuan') || normalized.includes('lai') || normalized.includes('ban gi') || normalized.includes('tien nang') || normalized.includes('de ban') || normalized.includes('hot')) {
+        return `Tôi đề xuất 3 hướng đáng chú ý cho "${keyword || 'dữ liệu hiện tại'}":\n\nDễ bán nhất:\n${topSellText}\n\nGiá trị/Doanh thu tốt:\n${topValueText}\n\nNgách đáng thử:\n${nicheText}`;
+    }
+
+    return `Đang xem "${keyword || 'dữ liệu hiện tại'}". Tôi có thể giúp bạn theo 3 hướng nhanh:\n1. Gợi ý sản phẩm dễ bán nhất\n2. Gợi ý mặt hàng phù hợp theo vốn\n3. Tìm ngách ít cạnh tranh\n\nBạn có thể bấm nút nhanh hoặc gõ: "bán gì với vốn 1 triệu".`;
+};
+
+const defaultChatMessages = [
+    {
+        role: 'bot',
+        text: 'Tôi có thể gợi ý mặt hàng tiềm năng từ dữ liệu bạn đang xem. Hãy thử: "gợi ý sản phẩm tiềm năng", "bán gì với vốn 1 triệu", hoặc "ngách ít cạnh tranh".'
+    }
+];
+
 // ============================================================
 // ✅ MAIN APP COMPONENT
 // ============================================================
 
 function App() {
     const [activeTab, setActiveTab] = useState('single');
+    const [chatOpen, setChatOpen] = useState(false);
+    const [chatInput, setChatInput] = useState('');
+    const [chatMessages, setChatMessages] = useState(defaultChatMessages);
     
     // State for Single Tab
     const [keyword, setKeyword] = useState('');
@@ -325,6 +466,15 @@ function App() {
         ? Math.min(selectedBatchInsightIndex, batchInsights.length - 1)
         : 0;
     const selectedBatchInsight = hasBatchInsights ? batchInsights[safeBatchInsightIndex] : null;
+    const currentChatProducts = activeTab === 'single'
+        ? (resultSingle || [])
+        : (selectedBatchInsight?.products || resultBatch || []);
+    const currentChatKeyword = activeTab === 'single'
+        ? (keyword || 'từ khóa hiện tại')
+        : (selectedBatchInsight?.keyword || selectedFile?.name || 'CSV hiện tại');
+    const currentChatInsight = activeTab === 'single'
+        ? insightSingle
+        : (selectedBatchInsight?.insight || insightBatch);
 
     const handleSingleExecute = () => {
         if (!keyword.trim()) return;
@@ -340,6 +490,35 @@ function App() {
         if (e.target.files && e.target.files[0]) {
             setSelectedFile(e.target.files[0]);
         }
+    };
+
+    const sendChatMessage = (message) => {
+        const trimmed = String(message || '').trim();
+        if (!trimmed) return;
+
+        setChatMessages((previous) => [
+            ...previous,
+            { role: 'user', text: trimmed },
+            {
+                role: 'bot',
+                text: buildChatAdvice({
+                    message: trimmed,
+                    products: currentChatProducts,
+                    keyword: currentChatKeyword,
+                    insight: currentChatInsight,
+                })
+            }
+        ]);
+        setChatInput('');
+        setChatOpen(true);
+    };
+
+    const handleChatSubmit = () => {
+        sendChatMessage(chatInput);
+    };
+
+    const handleQuickChat = (prompt) => {
+        sendChatMessage(prompt);
     };
 
     const exportToPDF = () => {
@@ -711,6 +890,95 @@ function App() {
                     )}
 
                 </main>
+
+                {/* CHATBOT FLOATING PANEL */}
+                <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">
+                    {chatOpen && (
+                        <div className="w-[380px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-indigo-500/30 bg-[#111827]/95 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 text-white">
+                                        <Icon name="bot" size={18} />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-bold text-white">Sales Assistant</div>
+                                        <div className="text-[11px] text-indigo-100">Tư vấn sản phẩm tiềm năng theo dữ liệu hiện tại</div>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setChatOpen(false)}
+                                    className="rounded-lg p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                                    aria-label="Đóng chatbot"
+                                >
+                                    <Icon name="x" size={16} />
+                                </button>
+                            </div>
+
+                            <div className="border-b border-white/10 px-4 py-3">
+                                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Gợi ý nhanh</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        'Gợi ý sản phẩm tiềm năng',
+                                        'Bán gì với vốn 1 triệu',
+                                        'Ngách ít cạnh tranh',
+                                    ].map((item) => (
+                                        <button
+                                            key={item}
+                                            onClick={() => handleQuickChat(item)}
+                                            className="rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-100 transition-colors hover:bg-indigo-500/20"
+                                        >
+                                            {item}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="mt-2 text-[11px] text-gray-500">
+                                    Đang tư vấn theo: <span className="font-semibold text-gray-300">{currentChatKeyword}</span>
+                                </div>
+                            </div>
+
+                            <div className="max-h-80 space-y-3 overflow-y-auto px-4 py-4">
+                                {chatMessages.map((message, index) => (
+                                    <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[85%] whitespace-pre-line rounded-2xl px-3 py-2 text-sm leading-6 ${message.role === 'user' ? 'bg-rose-600 text-white' : 'border border-white/10 bg-white/5 text-gray-100'}`}>
+                                            {message.text}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="border-t border-white/10 p-3">
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={chatInput}
+                                        onChange={(e) => setChatInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleChatSubmit()}
+                                        placeholder="Hỏi: nên bán gì, vốn bao nhiêu, ngách nào..."
+                                        className="flex-1 rounded-xl border border-white/10 bg-[#0b1220] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-gray-500 focus:border-indigo-400"
+                                    />
+                                    <button
+                                        onClick={handleChatSubmit}
+                                        className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700"
+                                    >
+                                        <Icon name="send" size={15} />
+                                        Gửi
+                                    </button>
+                                </div>
+                                <div className="mt-2 text-[11px] text-gray-500">
+                                    Chatbot dùng dữ liệu đang xem để gợi ý mặt hàng tiềm năng.
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => setChatOpen((value) => !value)}
+                        className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-2xl shadow-indigo-900/40 ring-1 ring-white/15 transition-transform hover:scale-105"
+                        aria-label="Mở chatbot"
+                    >
+                        <Icon name={chatOpen ? 'minus' : 'message-circle'} size={22} />
+                    </button>
+                </div>
             </div>
         </div>
     );
