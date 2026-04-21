@@ -157,19 +157,33 @@ const executeAnalysis = async (type, payload) => {
         }
         
         // ✅ FIX: Response mapping đúng với backend format
+        const mapApiProducts = (items = []) => items.map((p, idx) => ({
+            id: idx + 1,
+            product_id: p.product_id || '',
+            name: p.title || p.name || p.product_name || 'N/A',  // Backend trả 'title'
+            cat: p.categoryName || p.category || p.category_name || 'N/A',  // Backend trả 'categoryName'
+            price: `${(p.price || 0).toLocaleString()} VNĐ`,
+            sold: (p.boughtInLastMonth || p.quantity_sold || p.review_count || 0).toLocaleString(),  // Backend trả 'boughtInLastMonth'
+            rev: (p.estimated_revenue || 0).toLocaleString() + ' VNĐ',  // Backend trả 'estimated_revenue'
+            growth_percent: p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth ?? null,
+            url: p.product_url || p.url_path || (p.product_id ? `https://tiki.vn/p/${p.product_id}` : '')
+        }));
+
+        const mappedProducts = mapApiProducts(result.data.products || []);
+
+        const mappedPerKeywordInsights = Array.isArray(result.data.per_keyword_insights)
+            ? result.data.per_keyword_insights.map((entry) => ({
+                keyword: entry.keyword || 'N/A',
+                totalFound: entry.total_found || 0,
+                insight: entry.ai_insight || 'Không có insight',
+                products: mapApiProducts(Array.isArray(entry.products) ? entry.products : [])
+            }))
+            : [];
+
         return {
-            products: result.data.products.map((p, idx) => ({
-                id: idx + 1,
-                product_id: p.product_id || '',
-                name: p.title || p.name || p.product_name || 'N/A',  // Backend trả 'title'
-                cat: p.categoryName || p.category || p.category_name || 'N/A',  // Backend trả 'categoryName'
-                price: `${(p.price || 0).toLocaleString()} VNĐ`,
-                sold: (p.boughtInLastMonth || p.quantity_sold || p.review_count || 0).toLocaleString(),  // Backend trả 'boughtInLastMonth'
-                rev: (p.estimated_revenue || 0).toLocaleString() + ' VNĐ',  // Backend trả 'estimated_revenue'
-                growth_percent: p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth ?? null,
-                url: p.product_url || p.url_path || (p.product_id ? `https://tiki.vn/p/${p.product_id}` : '')
-            })),
-            insight: result.data.ai_insight || 'Không có insight'
+            products: mappedProducts,
+            insight: result.data.ai_insight || 'Không có insight',
+            batchInsights: mappedPerKeywordInsights
         };
     } catch (error) {
         console.error('API Error:', error);
@@ -254,6 +268,8 @@ function App() {
     const [loadingBatch, setLoadingBatch] = useState(false);
     const [resultBatch, setResultBatch] = useState(null);
     const [insightBatch, setInsightBatch] = useState('');
+    const [batchInsights, setBatchInsights] = useState([]);
+    const [selectedBatchInsightIndex, setSelectedBatchInsightIndex] = useState(0);
 
     const reportRef = useRef(null);
 
@@ -262,10 +278,14 @@ function App() {
             setLoadingSingle(true);
             setResultSingle(null);
             setInsightSingle('');
+            setBatchInsights([]);
+            setSelectedBatchInsightIndex(0);
         } else {
             setLoadingBatch(true);
             setResultBatch(null);
             setInsightBatch('');
+            setBatchInsights([]);
+            setSelectedBatchInsightIndex(0);
         }
 
         try {
@@ -278,6 +298,8 @@ function App() {
             } else {
                 setResultBatch(result.products);
                 setInsightBatch(result.insight);
+                setBatchInsights(result.batchInsights || []);
+                setSelectedBatchInsightIndex(0);
                 setLoadingBatch(false);
             }
             
@@ -291,10 +313,18 @@ function App() {
                 setLoadingSingle(false);
             } else {
                 setInsightBatch(errorMsg);
+                setBatchInsights([]);
+                setSelectedBatchInsightIndex(0);
                 setLoadingBatch(false);
             }
         }
     };
+
+    const hasBatchInsights = batchInsights.length > 0;
+    const safeBatchInsightIndex = hasBatchInsights
+        ? Math.min(selectedBatchInsightIndex, batchInsights.length - 1)
+        : 0;
+    const selectedBatchInsight = hasBatchInsights ? batchInsights[safeBatchInsightIndex] : null;
 
     const handleSingleExecute = () => {
         if (!keyword.trim()) return;
@@ -314,9 +344,17 @@ function App() {
 
     const exportToPDF = () => {
         const isSingle = activeTab === 'single';
-        const resultData = isSingle ? resultSingle : resultBatch;
-        const insightData = isSingle ? insightSingle : insightBatch;
-        const titleKeyword = isSingle ? keyword : (selectedFile ? selectedFile.name : 'File CSV');
+        const resultData = isSingle
+            ? resultSingle
+            : (selectedBatchInsight ? selectedBatchInsight.products : resultBatch);
+        const insightData = isSingle
+            ? insightSingle
+            : (selectedBatchInsight ? selectedBatchInsight.insight : insightBatch);
+        const titleKeyword = isSingle
+            ? keyword
+            : (selectedBatchInsight
+                ? `Từ khóa: ${selectedBatchInsight.keyword}`
+                : (selectedFile ? selectedFile.name : 'File CSV'));
 
         const pdfContent = `
             <div style="font-family: 'Arial', sans-serif; padding: 20px; background: white; color: black;">
@@ -635,7 +673,30 @@ function App() {
                     {!loadingSingle && resultSingle && activeTab === 'single' && renderResult(resultSingle, insightSingle, false)}
 
                     {/* RESULTS DASHBOARD - BATCH */}
-                    {!loadingBatch && resultBatch && activeTab === 'batch' && renderResult(resultBatch, insightBatch, false)}
+                    {!loadingBatch && activeTab === 'batch' && selectedBatchInsight && (
+                        <div className="space-y-6">
+                            <div className="max-w-6xl mx-auto bg-[#1e293b] rounded-xl border border-gray-700 p-4">
+                                <div className="text-xs text-gray-400 mb-3">Chọn từ khóa để xem dashboard chi tiết:</div>
+                                <div className="flex gap-2 overflow-x-auto pb-1">
+                                    {batchInsights.map((entry, idx) => (
+                                        <button
+                                            key={`${entry.keyword}-${idx}`}
+                                            onClick={() => setSelectedBatchInsightIndex(idx)}
+                                            className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium border transition-all ${safeBatchInsightIndex === idx ? 'bg-rose-600 text-white border-rose-500' : 'bg-[#0f172a] text-gray-300 border-gray-600 hover:border-rose-500 hover:text-white'}`}
+                                        >
+                                            {entry.keyword} ({entry.totalFound})
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="max-w-6xl mx-auto text-sm text-gray-300">
+                                Đang xem: <span className="font-semibold text-white">{selectedBatchInsight.keyword}</span>
+                            </div>
+                            {renderResult(selectedBatchInsight.products, selectedBatchInsight.insight, false)}
+                        </div>
+                    )}
+
+                    {!loadingBatch && activeTab === 'batch' && !selectedBatchInsight && resultBatch && renderResult(resultBatch, insightBatch, false)}
 
                     {/* EMPTY STATE */}
                     {!loadingSingle && !resultSingle && !loadingBatch && !resultBatch && (

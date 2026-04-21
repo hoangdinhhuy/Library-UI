@@ -326,9 +326,23 @@ Viết đầy đủ, chi tiết, chuyên sâu! Đây là báo cáo cho CEO, khô
         """Analyze multiple keywords (batch mode)"""
         all_products = []
         seen_ids = set()
+        per_keyword_insights = []
         
         for keyword in keywords[:10]:
             products = self.search_products(keyword, limit_per_keyword, use_semantic=False)
+
+            # Generate insight per keyword (same behavior as single analysis)
+            keyword_insight = self.generate_insight(
+                products=products,
+                keyword=keyword,
+                include_ml_insights=True
+            )
+            per_keyword_insights.append({
+                'keyword': keyword,
+                'products': products,
+                'ai_insight': keyword_insight,
+                'total_found': len(products)
+            })
             
             for p in products:
                 if p['product_id'] not in seen_ids:
@@ -340,6 +354,7 @@ Viết đầy đủ, chi tiết, chuyên sâu! Đây là báo cáo cho CEO, khô
         return {
             'products': all_products[:20],
             'ai_insight': batch_insight,
+            'per_keyword_insights': per_keyword_insights,
             'keywords_processed': len(keywords),
             'total_found': len(all_products)
         }
