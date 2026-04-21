@@ -39,30 +39,30 @@ if (-not (Test-Path $webDir)) {
     Write-Error "Website folder not found: $webDir"
 }
 
-Write-Host 'Cleaning old processes on ports 8000 and 5501 ...' -ForegroundColor Cyan
-Stop-PortProcesses -Ports @(8000, 5501)
+Write-Host 'Cleaning old processes on ports 8000 and 5500 ...' -ForegroundColor Cyan
+Stop-PortProcesses -Ports @(8000, 5500)
 
 Write-Host 'Starting backend at http://localhost:8000 ...' -ForegroundColor Cyan
 $backendCmd = @(
     "Set-Location '$apiDir'",
-    "if (Test-Path '.\\venv\\Scripts\\Activate.ps1') { . '.\\venv\\Scripts\\Activate.ps1' }",
+    "if (Test-Path '.\\venv311\\Scripts\\Activate.ps1') { . '.\\venv311\\Scripts\\Activate.ps1' }",
     "python main.py"
 ) -join '; '
 Start-Process powershell -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', $backendCmd
 
-Write-Host 'Starting frontend at http://localhost:5501 ...' -ForegroundColor Cyan
+Write-Host 'Starting frontend at http://localhost:5500 ...' -ForegroundColor Cyan
 $frontendCmd = @(
     "Set-Location '$webDir'",
-    "python -m http.server 5501"
+    "python -m http.server 5500"
 ) -join '; '
 Start-Process powershell -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', $frontendCmd
 
 Write-Host 'Opening browser...' -ForegroundColor Green
-$cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-Start-Process "http://localhost:5501/?v=$cacheBust"
+Start-Process 'http://localhost:5500'
 
 Write-Host ''
 Write-Host 'If API still fails, verify:' -ForegroundColor Yellow
 Write-Host '1) GEMINI_API_KEY is configured in Tiki_Project/api/.env'
-Write-Host '2) Backend terminal has no startup errors'
-Write-Host '3) Frontend terminal has no startup errors'
+Write-Host '2) Port 8000 is free'
+Write-Host '3) Backend terminal has no startup errors'
+Write-Host '4) Frontend terminal has no startup errors'

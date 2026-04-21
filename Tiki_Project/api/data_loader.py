@@ -250,13 +250,15 @@ class DataLoader:
         
         # Search in name and category
         keyword_lower = keyword.lower()
+        # Dùng word boundary (\b) để tránh match substring (vd: "xe" không match "Boxer")
+        pattern = r'\b' + re.escape(keyword_lower) + r'\b'
         
         mask = (
-            self.products_df['name'].str.lower().str.contains(keyword_lower, na=False) |
-            self.products_df['category'].str.lower().str.contains(keyword_lower, na=False)
+            self.products_df['name'].str.lower().str.contains(pattern, na=False, regex=True) |
+            self.products_df['category'].str.lower().str.contains(pattern, na=False, regex=True)
         )
         
-        results = self.products_df[mask].head(limit)
+        results = self.products_df[mask].sort_values('quantity_sold', ascending=False).head(limit)
         
         # Convert to list of dicts
         products = []

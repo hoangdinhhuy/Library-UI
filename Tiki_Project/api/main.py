@@ -53,7 +53,8 @@ search_engine: Optional[SearchEngine] = None
 class SearchRequest(BaseModel):
     keyword: str = Field(..., min_length=1, max_length=200)
     market: str = Field(default="US")
-    limit: int = Field(default=20, ge=1, le=50)
+    limit: int = Field(default=9999, ge=1) 
+    display_limit: int = Field(default=20, ge=1)
 
 class Product(BaseModel):
     product_id: str
@@ -124,6 +125,108 @@ def get_search_engine() -> SearchEngine:
         raise HTTPException(status_code=503, detail="Search engine not initialized")
     return search_engine
 
+
+class MarketReportRequest(BaseModel):
+    keyword: str = Field(..., min_length=1, max_length=200)
+
+@app.post("/api/market-report")
+async def market_report(
+    request: MarketReportRequest,
+    engine: SearchEngine = Depends(get_search_engine)
+):
+    try:
+        logger.info(f"📊 Market report request: '{request.keyword}'")
+        all_products = engine.search_products(keyword=request.keyword, limit=9999, use_semantic=True)
+        report = engine.generate_market_report(keyword=request.keyword, products=all_products)
+        return {"success": True, "data": report}
+    except Exception as e:
+        logger.error(f"Market report failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market-insight")
+async def market_insight():
+    if not model_loader or not model_loader.kmeans_model:
+        raise HTTPException(status_code=503, detail="KMeans model not loaded")
+    if data_loader is None or data_loader.products_df is None or data_loader.products_df.empty:
+        raise HTTPException(status_code=503, detail="Product data not loaded")
+    try:
+        df = data_loader.products_df.copy()
+        cluster_ids, cluster_names_col = [], []
+        for _, row in df.iterrows():
+            cid, cname = model_loader.assign_cluster(
+                float(row.get('price_normalized', 0)),
+                float(row.get('rating_normalized', 0)),
+                float(row.get('popularity_score', 0)),
+            )
+            cluster_ids.append(cid)
+            cluster_names_col.append(cname)
+        df['cluster_id']   = cluster_ids
+        df['cluster_name'] = cluster_names_col
+
+        cluster_summary = []
+        for cid in sorted(df['cluster_id'].unique()):
+            if cid < 0:
+                continue
+            sub = df[df['cluster_id'] == cid]
+            avg_rating_orig = float(sub['original_rating'].mean())
+            avg_pop = float(sub['popularity_score'].mean())
+            top3 = sub.nlargest(3, 'popularity_score')
+            top_products = []
+            for _, r in top3.iterrows():
+                top_products.append({
+                    'product_id': str(r['product_id']), 'name': str(r['name']),
+                    'category': str(r['category']), 'price': float(r['original_price']),
+                    'rating': float(r['original_rating']), 'quantity_sold': int(r['quantity_sold']),
+                })
+            cluster_summary.append({
+                'cluster_id': int(cid),
+                'cluster_name': model_loader.cluster_names.get(cid, f'Cluster {cid}'),
+                'product_count': int(len(sub)),
+                'avg_price': round(float(sub['original_price'].mean()), 0),
+                'avg_rating': round(avg_rating_orig, 2),
+                'avg_popularity': round(avg_pop, 3),
+                'avg_qty_sold': round(float(sub['quantity_sold'].mean()), 0),
+                'top_category': str(sub['category'].mode().iloc[0]) if not sub.empty else '',
+                'is_blue_ocean': avg_rating_orig < 2.0 and avg_pop > 2.0,
+                'top_products': top_products,
+            })
+
+        blue_df = df[df['original_rating'] < 2.0].nlargest(15, 'popularity_score')
+        blue_ocean_products = []
+        for _, row in blue_df.iterrows():
+            url = data_loader.resolve_product_url(row['product_id'], row['name'], row['category'])
+            blue_ocean_products.append({
+                'product_id': str(row['product_id']), 'name': str(row['name']),
+                'category': str(row['category']), 'price': float(row['original_price']),
+                'rating': float(row['original_rating']), 'quantity_sold': int(row['quantity_sold']),
+                'popularity_score': round(float(row['popularity_score']), 3),
+                'cluster_name': str(row['cluster_name']), 'url': url,
+            })
+
+        blue_ocean_count = int((df['original_rating'] < 2.0).sum())
+        silhouette = 0.464  # from model metadata: silhouette_score
+        if model_loader and hasattr(model_loader, 'kmeans_metadata'):
+            silhouette = model_loader.kmeans_metadata.get('metrics', {}).get('silhouette_score', silhouette)
+        max_popularity = float(df['popularity_score'].max()) if 'popularity_score' in df.columns else 10.0
+        for c in cluster_summary:
+            raw_opp = (c['avg_popularity'] / max(max_popularity, 1)) * (1 - c['avg_rating'] / 5) * 100
+            c['opportunity_score'] = round(raw_opp, 1)
+        return {'success': True, 'data': {
+            'cluster_summary': cluster_summary,
+            'blue_ocean_products': blue_ocean_products,
+            'total_products': int(len(df)),
+            'n_clusters': 5,
+            'blue_ocean_count': blue_ocean_count,
+            'silhouette_score': round(silhouette, 4),
+            'max_popularity': round(max_popularity, 3),
+        }}
+    except Exception as e:
+        logger.error(f"Market insight failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @app.get("/")
 async def root():
     return {
@@ -180,27 +283,22 @@ async def search_products(
         logger.info(f"🔍 Search request: '{request.keyword}' (limit: {request.limit})")
         
         # Search products
-        products = engine.search_products(
+        # Bước 1: Tìm TẤT CẢ (không giới hạn)
+        all_products = engine.search_products(
             keyword=request.keyword,
-            limit=request.limit,
+            limit=request.limit,       # = 9999 → lấy toàn bộ
             use_semantic=True
         )
-        
-        # Generate AI insight
-        ai_insight = engine.generate_insight(
-            products=products,
-            keyword=request.keyword,
-            include_ml_insights=True
-        )
-        
-        return SearchResponse(
-            success=True,
-            data={
-                "products": products,
-                "ai_insight": ai_insight,
-                "total_found": len(products)
-            }
-        )
+
+        # Bước 2: Insight phân tích từ TOÀN BỘ sản phẩm
+        ai_insight = engine.generate_insight(products=all_products, keyword=request.keyword, include_ml_insights=True)
+
+        # Bước 3: Chỉ trả về display_limit sản phẩm cho UI
+        return SearchResponse(success=True,data={
+            "products": all_products[:request.display_limit],  # = 20 hiển thị
+            "ai_insight": ai_insight,
+            "total_found": len(all_products)   # số thực tế (ví dụ 200)
+        })
         
     except Exception as e:
         logger.error(f"Search failed: {e}")

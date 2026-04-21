@@ -2,8 +2,10 @@
 # MODEL LOADER - Load All Trained Models
 # ============================================================
 
-import pickle
+import csv
 import logging
+import math
+import pickle
 from pathlib import Path
 from typing import Dict, Any, Optional
 import os
@@ -38,6 +40,8 @@ class ModelLoader:
         self.prophet_metadata = None
         self.prophet_forecasts = None
         self.phobert_available = False
+        self.cluster_centroids: Dict[int, Dict[str, float]] = {}
+        self.cluster_names: Dict[int, str] = {}
         
         self._load_all_models()
     
@@ -55,95 +59,88 @@ class ModelLoader:
         self._check_phobert()
     
     def _load_kmeans(self):
-        """Load KMeans clustering model"""
+        """Load KMeans model from pkl, then load cluster names from CSV."""
+        kmeans_dir = self.models_dir / "KMeans_CLustering"
+
+        # --- Load cluster names/centroids from CSV ---
+        csv_path = kmeans_dir / "cluster_profiles.csv"
+        if csv_path.exists():
+            try:
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = list(csv.reader(f))
+
+                feature_row = reader[0]
+                stat_row    = reader[1]
+
+                col_map: Dict[tuple, int] = {}
+                for i, (feat, stat) in enumerate(zip(feature_row, stat_row)):
+                    col_map[(feat.strip(), stat.strip())] = i
+
+                price_col  = col_map.get(('price_normalized', 'mean'))
+                rating_col = col_map.get(('rating_normalized', 'mean'))
+                pop_col    = col_map.get(('popularity_score', 'mean'))
+
+                if None not in (price_col, rating_col, pop_col):
+                    for row in reader[2:]:
+                        if not row or not row[0].strip().isdigit():
+                            continue
+                        cid = int(row[0].strip())
+                        self.cluster_centroids[cid] = {
+                            'price':  float(row[price_col]),
+                            'rating': float(row[rating_col]),
+                            'pop':    float(row[pop_col]),
+                        }
+                logger.info(f"   ✅ KMeans CSV centroids loaded ({len(self.cluster_centroids)} clusters)")
+            except Exception as e:
+                logger.warning(f"   ⚠️  KMeans CSV parse failed: {e}")
+
+        self.cluster_names = {
+            0: "Gia dụng phổ biến",
+            1: "Sách bán chạy",
+            2: "Sách hot nhất",
+            3: "Sản phẩm rating thấp",
+            4: "Sản phẩm tiêu chuẩn",
+        }
+
+        # --- Load pkl model ---
         try:
-            # Try different possible paths
-            possible_paths = [
-                self.models_dir / "kmeans" / "kmeans_model.pkl",
-                self.models_dir / "k_mean" / "kmeans_model_20260419_100129_model.pkl",
-                self.models_dir / "KMeans_CLustering" / "KMeans_CLustering_Final" / "kmeans_model_20260419_150808_model.pkl",
-            ]
-            
-            # Also look for any matching KMeans pickle under known folders
-            kmeans_dir = self.models_dir / "KMeans_CLustering" / "KMeans_CLustering_Final"
-            if kmeans_dir.exists():
-                for path in kmeans_dir.glob("kmeans_model*.pkl"):
-                    possible_paths.append(path)
-            
-            for kmeans_path in possible_paths:
-                if kmeans_path.exists():
-                    with open(kmeans_path, 'rb') as f:
-                        self.kmeans_model = pickle.load(f)
-                    logger.info(f"   ✅ KMeans loaded: {kmeans_path}")
-                    return
-            
-            logger.warning("   ⚠️  KMeans model not found")
-            
+            pkl_files = sorted(kmeans_dir.glob("kmeans_model_*.pkl"))
+            if pkl_files:
+                with open(pkl_files[-1], 'rb') as f:
+                    self.kmeans_model = pickle.load(f)
+                logger.info(f"   ✅ KMeans pkl loaded: {pkl_files[-1].name}")
+            elif self.cluster_centroids:
+                self.kmeans_model = True  # fallback: centroids only
+                logger.info("   ✅ KMeans using CSV centroids (no pkl)")
+            else:
+                logger.warning("   ⚠️  KMeans: no pkl and no CSV found")
         except Exception as e:
-            logger.error(f"   ❌ Failed to load KMeans: {e}")
+            logger.error(f"   ❌ Failed to load KMeans pkl: {e}")
+            if self.cluster_centroids:
+                self.kmeans_model = True
     
     def _load_prophet(self):
-        """Load Prophet forecasting models"""
+        """Load Prophet forecasts pkl from Prophet_models/ directory."""
         try:
-            prophet_dir = self.models_dir / "Prophet"
+            prophet_dir = self.models_dir / "Prophet_models"
             if not prophet_dir.exists():
-                prophet_dir = self.models_dir / "prophet"
-            if not prophet_dir.exists():
-                prophet_dir = self.models_dir / "Prophet_models" / "prophet_models"
-            
-            if prophet_dir.exists():
-                # Load models
-                models_path = prophet_dir / "models_full.pkl"
-                if not models_path.exists():
-                    # Try with timestamp
-                    models_files = list(prophet_dir.glob("models_full_*.pkl"))
-                    if models_files:
-                        models_path = models_files[0]
-                
-                if models_path.exists():
-                    try:
-                        with open(models_path, 'rb') as f:
-                            self.prophet_models = pickle.load(f)
-                        logger.info(f"   ✅ Prophet models loaded ({len(self.prophet_models)} products)")
-                    except ModuleNotFoundError as e:
-                        if 'pyspark.sql.metrics' in str(e):
-                            logger.warning(f"   ⚠️  Prophet models loaded via pyspark stub (metrics ignored)")
-                        else:
-                            raise
-                
-                # Load metadata (skip on error to avoid cascading failures)
-                try:
-                    metadata_path = prophet_dir / "metadata.pkl"
-                    if not metadata_path.exists():
-                        metadata_files = list(prophet_dir.glob("metadata_*.pkl"))
-                        if metadata_files:
-                            metadata_path = metadata_files[0]
-                    
-                    if metadata_path.exists():
-                        with open(metadata_path, 'rb') as f:
-                            self.prophet_metadata = pickle.load(f)
-                except ModuleNotFoundError as e:
-                    if 'pyspark' not in str(e):
-                        raise
-                
-                # Load forecasts (skip on error to avoid cascading failures)
-                try:
-                    forecasts_path = prophet_dir / "future_forecasts.pkl"
-                    if not forecasts_path.exists():
-                        forecast_files = list(prophet_dir.glob("future_forecasts_*.pkl"))
-                        if forecast_files:
-                            forecasts_path = forecast_files[0]
-                    
-                    if forecasts_path.exists():
-                        with open(forecasts_path, 'rb') as f:
-                            self.prophet_forecasts = pickle.load(f)
-                        logger.info(f"   ✅ Prophet forecasts loaded")
-                except ModuleNotFoundError as e:
-                    if 'pyspark' not in str(e):
-                        raise
-            else:
-                logger.warning("   ⚠️  Prophet models directory not found")
-                
+                logger.warning("   ⚠️  Prophet_models directory not found")
+                return
+
+            # Load future forecasts
+            forecast_files = sorted(prophet_dir.glob("future_forecasts_*.pkl"))
+            if forecast_files:
+                with open(forecast_files[-1], 'rb') as f:
+                    self.prophet_forecasts = pickle.load(f)
+                logger.info(f"   ✅ Prophet forecasts loaded: {forecast_files[-1].name} ({len(self.prophet_forecasts)} products)")
+
+            # Load metadata
+            metadata_files = sorted(prophet_dir.glob("metadata_*.pkl"))
+            if metadata_files:
+                with open(metadata_files[-1], 'rb') as f:
+                    self.prophet_metadata = pickle.load(f)
+                logger.info(f"   ✅ Prophet metadata loaded: {metadata_files[-1].name}")
+
         except Exception as e:
             logger.error(f"   ❌ Failed to load Prophet: {e}")
 
@@ -169,67 +166,45 @@ class ModelLoader:
                 
         except Exception as e:
             logger.error(f"   ❌ Failed to check PhoBERT: {e}")
-    
-    def get_product_cluster(self, product_features: list) -> int:
+    def assign_cluster(self, price_normalized: float, rating_normalized: float, popularity_score: float):
         """
-        Get cluster ID for a product
-        
-        Args:
-            product_features: [price_normalized, rating_normalized, popularity_score]
-            
-        Returns:
-            Cluster ID (0-4)
+        Assign a product to the nearest KMeans cluster.
+        Uses sklearn predict() if pkl model loaded, otherwise Euclidean distance to CSV centroids.
+        Returns (cluster_id, cluster_name). Returns (-1, 'N/A') if not loaded.
         """
         if self.kmeans_model is None:
-            return -1
-        
-        try:
-            import numpy as np
-            features = np.array(product_features).reshape(1, -1)
-            cluster = self.kmeans_model.predict(features)[0]
-            return int(cluster)
-        except Exception as e:
-            logger.error(f"Cluster prediction failed: {e}")
-            return -1
-    
-    def get_price_forecast(self, product_id: int) -> Optional[Dict]:
-        """
-        Get price forecast for a product
-        
-        Args:
-            product_id: Product ID
-            
-        Returns:
-            Forecast dict or None
-        """
-        if self.prophet_forecasts is None:
-            return None
-        
-        try:
-            if product_id in self.prophet_forecasts:
-                forecast_df = self.prophet_forecasts[product_id]
-                # Get last 7 days forecast
-                last_7 = forecast_df.tail(7)
-                
-                return {
-                    'product_id': product_id,
-                    'forecast_dates': last_7['ds'].dt.strftime('%Y-%m-%d').tolist(),
-                    'forecast_prices': last_7['yhat'].tolist(),
-                    'lower_bound': last_7['yhat_lower'].tolist(),
-                    'upper_bound': last_7['yhat_upper'].tolist(),
-                }
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Forecast retrieval failed: {e}")
-            return None
-    
+            return -1, "N/A"
+
+        # If a real sklearn model is loaded (not the bool sentinel)
+        if self.kmeans_model is not True:
+            try:
+                import numpy as np
+                features = np.array([[price_normalized, rating_normalized, popularity_score]])
+                cid = int(self.kmeans_model.predict(features)[0])
+                return cid, self.cluster_names.get(cid, f"Cluster {cid}")
+            except Exception as e:
+                logger.debug(f"sklearn predict failed, falling back to centroids: {e}")
+
+        # Fallback: Euclidean distance to CSV centroids
+        if not self.cluster_centroids:
+            return -1, "N/A"
+        best_id, best_dist = -1, float('inf')
+        for cid, c in self.cluster_centroids.items():
+            dist = math.sqrt(
+                (price_normalized  - c['price'])  ** 2 +
+                (rating_normalized - c['rating']) ** 2 +
+                (popularity_score  - c['pop'])    ** 2
+            )
+            if dist < best_dist:
+                best_dist = dist
+                best_id = cid
+        return best_id, self.cluster_names.get(best_id, f"Cluster {best_id}")
+
     def get_model_stats(self) -> Dict[str, Any]:
         """Get statistics about loaded models"""
         return {
-            'kmeans_loaded': self.kmeans_model is not None,
-            'prophet_loaded': self.prophet_models is not None,
-            'prophet_num_models': len(self.prophet_models) if self.prophet_models else 0,
+            'kmeans_loaded': bool(self.kmeans_model),
+            'prophet_loaded': self.prophet_forecasts is not None,
+            'prophet_num_models': len(self.prophet_forecasts) if self.prophet_forecasts else 0,
             'phobert_available': self.phobert_available
         }

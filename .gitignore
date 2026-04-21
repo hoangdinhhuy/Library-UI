@@ -1,3 +1,8 @@
-
 # Exclude oversized model file for GitHub push
 Tiki_Project/module/Phobert_model/model.safetensors
+Tiki_Project/api/venv311/
+Tiki_Project/chroma_db/
+__pycache__/
+*.pyc
+*.whl
+.env

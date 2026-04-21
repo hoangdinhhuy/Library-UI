@@ -6,6 +6,8 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
+httpx==0.25.2
+starlette==0.27.0
 
 # Pydantic for settings and validation
 pydantic==1.10.13
@@ -14,12 +16,20 @@ pydantic[dotenv]==1.10.13
 # Data processing
 pandas==1.5.3
 numpy==1.24.3
+scipy==1.11.4
 
 # LangChain and RAG components
 langchain==0.1.0
 chromadb==0.4.22
 sentence-transformers==2.3.1
-onnxruntime==1.24.4
+langchain-community==0.0.10
+
+# Embeddings & NLP
+transformers==4.35.2
+tokenizers==0.15.0
+huggingface-hub==0.19.4
+torch==2.1.2
+onnxruntime==1.16.3
 
 # Google Gemini
 google-generativeai==0.3.2
@@ -33,6 +43,8 @@ protobuf<5.0.0,>=3.19.5
 tenacity<9.0.0,>=8.1.0
 packaging<24.0,>=23.2
 typing-extensions>=4.5.0
+grpcio>=1.59.0
+grpcio-status>=1.59.0
 
 # Utilities
 python-dotenv==1.0.0
