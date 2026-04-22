@@ -10,6 +10,7 @@ function SinglePage() {
     const [result,       setResult]       = useState(null);
     const [insight,      setInsight]      = useState('');
     const [contextInfo,  setContextInfo]  = useState(null);
+    const [analytics,    setAnalytics]    = useState(null);
 
     useEffect(() => {
         lucide.createIcons();
@@ -21,11 +22,13 @@ function SinglePage() {
         setResult(null);
         setInsight('');
         setContextInfo(null);
+        setAnalytics(null);
         try {
             const data = await executeAnalysis('single', { keyword, context_id: null });
             setResult(data.products);
             setInsight(data.insight);
             setContextInfo(data.context);
+            setAnalytics(data.analytics);
         } catch (error) {
             setInsight(
                 `❌ Lỗi kết nối Backend:\n${error.message}\n\nVui lòng kiểm tra:\n` +
@@ -46,11 +49,13 @@ function SinglePage() {
         setLoading(true);
         setResult(null);
         setInsight('');
+        setAnalytics(null);
         try {
             const data = await executeAnalysis('single', { keyword, context_id: nextContextId });
             setResult(data.products);
             setInsight(data.insight);
             setContextInfo(data.context);
+            setAnalytics(data.analytics);
         } catch (error) {
             setInsight(`❌ Lỗi phân tích lại: ${error.message}`);
         } finally {
@@ -121,7 +126,7 @@ function SinglePage() {
             )}
 
             {/* RESULTS */}
-            {!loading && result && renderResult(result, insight)}
+            {!loading && result && renderResult(result, insight, analytics)}
 
             {/* CONTEXT SUGGESTIONS */}
             {!loading && result && contextInfo && (

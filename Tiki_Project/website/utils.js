@@ -128,6 +128,7 @@ const executeAnalysis = async (type, payload) => {
             })),
             insight: result.data.ai_insight || 'Không có insight',
             context: result.data.context || null,
+            analytics: result.data.analytics || null,
         };
     } catch (error) {
         console.error('API Error:', error);
@@ -172,9 +173,22 @@ const renderFormattedInsight = (insight) => {
     });
 };
 
+const formatKpiFromAnalytics = (analytics) => {
+    if (!analytics) return null;
+    const totalRevenue = Number(analytics.total_revenue || 0);
+    const totalSold = Number(analytics.total_sold || 0);
+    const avgPrice = Number(analytics.avg_price || 0);
+    return {
+        revenue: totalRevenue > 0 ? `$${(totalRevenue / 1000000).toFixed(2)}M` : "$0",
+        sold: totalSold.toLocaleString(),
+        avg: `$${avgPrice.toFixed(2)}`,
+        growth: "N/A",
+    };
+};
+
 // Shared result dashboard (used by SinglePage & BatchPage)
-const renderResult = (result, insight) => {
-    const kpi = calculateKPI(result);
+const renderResult = (result, insight, analytics = null) => {
+    const kpi = formatKpiFromAnalytics(analytics) || calculateKPI(result);
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-10 mt-8">
             {/* KPI CARDS */}

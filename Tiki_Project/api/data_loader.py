@@ -234,22 +234,25 @@ class DataLoader:
         """Get timeseries DataFrame"""
         return self.timeseries_df
     
-    def search_products(self, keyword: str, limit: int = 20) -> List[Dict]:
+    def search_products(self, keyword: str, limit: int = 20, use_relevance_boost: bool = True) -> List[Dict]:
         """
-        Search products by keyword
+        Search products by keyword with combined relevance and sales ranking.
         
         Args:
             keyword: Search keyword
             limit: Max number of results
+            use_relevance_boost: If True, boost relevance for specialized searches (with model/brand terms)
             
         Returns:
-            List of product dictionaries
+            List of product dictionaries sorted by relevance + sales
         """
         if self.products_df.empty:
             return []
         
         # Search in name and category
         keyword_lower = keyword.lower()
+        keyword_words = keyword_lower.split()
+        
         # Dùng word boundary (\b) để tránh match substring (vd: "xe" không match "Boxer")
         pattern = r'\b' + re.escape(keyword_lower) + r'\b'
         
@@ -258,11 +261,59 @@ class DataLoader:
             self.products_df['category'].str.lower().str.contains(pattern, na=False, regex=True)
         )
         
-        results = self.products_df[mask].sort_values('quantity_sold', ascending=False).head(limit)
+        results_df = self.products_df[mask].copy()
+        
+        if results_df.empty:
+            return []
+        
+        # === RELEVANCE SCORING ===
+        # Score products based on keyword match quality
+        def calculate_relevance_score(row):
+            title = str(row.get('name', '')).lower()
+            category = str(row.get('category', '')).lower()
+            text = f"{title} {category}"
+            
+            score = 0
+            
+            # Exact keyword match in title (highest priority)
+            if re.search(pattern, title):
+                score += 10
+            
+            # Keyword in category
+            if re.search(pattern, category):
+                score += 3
+            
+            # Count how many keyword words match (for multi-word searches)
+            matching_words = sum(1 for word in keyword_words if word in text)
+            score += matching_words * 5
+            
+            return score
+        
+        results_df['relevance_score'] = results_df.apply(calculate_relevance_score, axis=1)
+        
+        # === COMBINED RANKING ===
+        # Normalize quantity_sold for fair comparison
+        max_quantity = results_df['quantity_sold'].max()
+        results_df['quantity_norm'] = (results_df['quantity_sold'] / max_quantity) if max_quantity > 0 else 0
+        
+        # Detect if this is a specialized search (contains model/brand terms)
+        # These searches should prioritize relevance over sales volume
+        vehicle_keywords = ['xe', 'oto', 'o to', 'xe may', 'xemay', 'xe dap', 'xedap', 'future', 'vision', 'pcx', 'lead', 'air blade']
+        is_specialized_search = any(kw in keyword_lower for kw in vehicle_keywords)
+        
+        if use_relevance_boost and is_specialized_search:
+            # For specialized searches: prioritize relevance (70%) over sales (30%)
+            results_df['final_score'] = (results_df['relevance_score'] * 0.7) + (results_df['quantity_norm'] * 30)
+        else:
+            # For general searches: balanced approach (40% relevance, 60% sales)
+            results_df['final_score'] = (results_df['relevance_score'] * 0.4) + (results_df['quantity_norm'] * 60)
+        
+        # Sort by final score (descending), then by quantity_sold as tiebreaker
+        results_df = results_df.sort_values(['final_score', 'quantity_sold'], ascending=[False, False])
         
         # Convert to list of dicts
         products = []
-        for _, row in results.iterrows():
+        for _, row in results_df.head(limit).iterrows():
             product_url = self.resolve_product_url(
                 product_id=row.get('product_id'),
                 name=row.get('name'),

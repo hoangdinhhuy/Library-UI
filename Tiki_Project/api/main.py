@@ -316,11 +316,30 @@ async def search_products(
         # Bước 3: Insight phân tích từ sản phẩm ĐÚNG NGỮ CẢNH (primary/selected)
         ai_insight = engine.generate_insight(products=filtered, keyword=request.keyword, include_ml_insights=True)
 
+        # Bước 3.5: Analytics MUST use the full filtered dataset
+        if filtered:
+            total_revenue = sum(float(p.get("estimated_revenue", float(p.get("price", 0)) * float(p.get("boughtInLastMonth", 0)))) for p in filtered)
+            total_sold = sum(int(p.get("boughtInLastMonth", 0)) for p in filtered)
+            avg_price = sum(float(p.get("price", 0)) for p in filtered) / len(filtered)
+            avg_rating = sum(float(p.get("rating", 0)) for p in filtered) / len(filtered)
+        else:
+            total_revenue = 0.0
+            total_sold = 0
+            avg_price = 0.0
+            avg_rating = 0.0
+
         # Bước 4: Chỉ trả về display_limit sản phẩm cho UI
         return SearchResponse(success=True,data={
             "products": filtered[:request.display_limit],  # = 20 hiển thị (đúng ngữ cảnh)
             "ai_insight": ai_insight,
             "total_found": len(filtered),   # số thực tế (đúng ngữ cảnh)
+            "analytics": {
+                "total_products": len(filtered),
+                "total_sold": total_sold,
+                "total_revenue": round(total_revenue, 0),
+                "avg_price": round(avg_price, 2),
+                "avg_rating": round(avg_rating, 2),
+            },
             "context": {
                 "primary_context": ctx["primary_context"],
                 "selected_context": ctx["selected_context"],
