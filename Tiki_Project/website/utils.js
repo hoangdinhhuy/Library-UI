@@ -2,8 +2,22 @@
 // 🔧 SHARED UTILITIES — Icon, calculateKPI, API, renderResult
 // ============================================================
 
+// --- ERROR BOUNDARY ---
+class ErrorBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+    static getDerivedStateFromError(error) { return { hasError: true, error }; }
+    render() {
+        if (this.state.hasError) {
+            return <div className="p-5 bg-red-50 text-red-600 border border-red-500 rounded-xl max-w-4xl mx-auto mt-10"><h2>React Fatal Error:</h2><pre className="text-xs overflow-auto">{this.state.error.stack || this.state.error.message}</pre></div>;
+        }
+        return this.props.children;
+    }
+}
+
 // --- ICONS COMPONENT ---
-const Icon = ({ name, size = 20, className = "" }) => <i data-lucide={name} width={size} height={size} className={className}></i>;
+const Icon = ({ name, size = 20, className = "" }) => (
+    <span className="inline-flex items-center justify-center" dangerouslySetInnerHTML={{ __html: `<i data-lucide="${name}" width="${size}" height="${size}" class="${className}"></i>` }} />
+);
 
 // --- FLEXIBLE VNĐ FORMATTER ---
 const formatVND = (value) => {
@@ -196,18 +210,25 @@ const executeAnalysis = async (type, payload) => {
         if (!result.success) throw new Error(result.message || 'Unknown error');
 
         return {
-            products: result.data.products.map((p, idx) => ({
-                id: idx + 1,
-                product_id: p.product_id || '',
-                name: p.title || p.name || p.product_name || 'N/A',
-                cat: p.categoryName || p.category || p.category_name || 'N/A',
-                price: `${(p.price || 0).toLocaleString()} VNĐ`,
-                sold: (p.boughtInLastMonth || p.quantity_sold || p.review_count || 0).toLocaleString(),
-                rev: (p.estimated_revenue || 0).toLocaleString() + ' VNĐ',
-                rating: Number(p.rating || p.avg_rating || 0).toFixed(1),
-                growth_percent: p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth ?? null,
-                url: p.product_url || p.url_path || (p.product_id ? `https://tiki.vn/p/${p.product_id}` : '')
-            })),
+            products: result.data.products.map((p, idx) => {
+                // Preserve product_id exactly as returned by the API (may be numeric string)
+                const apiPid = p.product_id || p.id || p.itemId || '';
+                const rawPid = (apiPid !== undefined && apiPid !== null && apiPid !== '')
+                    ? String(apiPid)
+                    : '';
+                return {
+                    id: idx + 1,
+                    product_id: rawPid,
+                    name: p.title || p.name || p.product_name || 'N/A',
+                    cat: p.categoryName || p.category || p.category_name || 'N/A',
+                    price: `${(p.price || 0).toLocaleString()} VNĐ`,
+                    sold: (p.boughtInLastMonth || p.quantity_sold || p.review_count || 0).toLocaleString(),
+                    rev: (p.estimated_revenue || 0).toLocaleString() + ' VNĐ',
+                    rating: Number(p.rating || p.avg_rating || 0).toFixed(1),
+                    growth_percent: p.growth_percent ?? p.monthly_growth ?? p.growth_rate ?? p.growth ?? null,
+                    url: p.product_url || p.url_path || (rawPid ? `https://tiki.vn/p/${rawPid}` : '')
+                };
+            }),
             insight: result.data.ai_insight || 'Không có insight',
             context: result.data.context || null,
             analytics: result.data.analytics || null,

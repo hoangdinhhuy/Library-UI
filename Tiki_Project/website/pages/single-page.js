@@ -209,7 +209,11 @@ function SinglePage() {
         setReviewModal({ open: true, product, reviews: [], loading: true, error: null });
         try {
             const pid = product.product_id || '';
-            if (!pid) throw new Error('Không tìm thấy product_id');
+            console.debug('[Reviews] Opening reviews for product:', product.name, '| product_id:', pid);
+            if (!pid) {
+                console.warn('[Reviews] product_id missing. Full product object:', product);
+                throw new Error(`Không tìm thấy product_id cho sản phẩm "${product.name || 'N/A'}"`);
+            }
             const res = await fetch(`${API_BASE_URL}/api/product-reviews/${pid}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const json = await res.json();
@@ -220,7 +224,7 @@ function SinglePage() {
     };
 
     return (
-        <>
+        <ErrorBoundary>
             <div>
                 {/* INPUT SECTION */}
                 <div className="max-w-4xl mx-auto mb-8">
@@ -517,7 +521,7 @@ function SinglePage() {
                     </div>
                 </div>
             )}
-        </>
+        </ErrorBoundary>
     );
 }
 

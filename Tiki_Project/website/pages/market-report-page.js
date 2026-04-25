@@ -194,7 +194,7 @@ function MarketReportPage() {
     };
 
     useEffect(() => {
-        lucide.createIcons();
+        setTimeout(() => lucide.createIcons(), 100);
     }, [result, searchHistory, chatMessages, isChatOpen, reviewModal.open]);
 
     useEffect(() => {
@@ -485,7 +485,7 @@ function MarketReportPage() {
     };
 
     return (
-        <>
+        <ErrorBoundary>
             <div className="max-w-5xl mx-auto space-y-6 pb-10">
 
                 {/* SEARCH BAR */}
@@ -1096,7 +1096,7 @@ function MarketReportPage() {
                     </div>
                 </div>
             )}
-        </>
+        </ErrorBoundary>
     );
 }
 

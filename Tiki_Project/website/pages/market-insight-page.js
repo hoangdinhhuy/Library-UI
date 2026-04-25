@@ -224,23 +224,37 @@ function MarketInsightPage() {
                         </div>
 
                         {/* KPI CARDS */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {[
-                                { icon: 'package', label: 'Tổng sản phẩm', value: result.total_products.toLocaleString('vi-VN'), color: 'text-blue-400', border: 'border-blue-500/30' },
-                                { icon: 'star', label: 'Rating Trung Bình', value: Number(result.market_avg_rating || 0).toFixed(2), color: 'text-yellow-400', border: 'border-yellow-500/30' },
-                                { icon: 'waves', label: 'Sản phẩm Blue Ocean', value: result.blue_ocean_count.toLocaleString('vi-VN'), color: 'text-blue-500', border: 'border-blue-300/40' },
-                            ].map(({ icon, label, value, color, border }) => (
-                                <div key={label} className={`bg-white rounded-xl border ${border} p-5 flex items-center gap-4`}>
-                                    <div className={`w-10 h-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0 ${color}`}>
-                                        <Icon name={icon} size={20} />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-                                        <p className={`text-xl font-bold ${color}`}>{value}</p>
-                                    </div>
+                        {(() => {
+                            const strategyCardMap = {
+                                '🌊 Đại Dương Xanh': { icon: 'waves',       label: 'Sản phẩm Blue Ocean', color: 'text-blue-500',    border: 'border-blue-300/40' },
+                                '⚡ Đại Trà':         { icon: 'zap',         label: 'Sản phẩm Đại Trà',    color: 'text-yellow-400',  border: 'border-yellow-500/30' },
+                                '💎 Cao Cấp':         { icon: 'gem',         label: 'Sản phẩm Cao Cấp',    color: 'text-violet-400',  border: 'border-violet-400/30' },
+                                '🔍 Ngách Nhỏ':       { icon: 'search',      label: 'Sản phẩm Ngách Nhỏ',  color: 'text-blue-400',    border: 'border-blue-300/30' },
+                                '📈 Tăng Trưởng':     { icon: 'trending-up', label: 'Sản phẩm Tăng Trưởng',color: 'text-emerald-400', border: 'border-emerald-400/30' },
+                            };
+                            const activeCard = strategyCardMap[activeStrategy] || strategyCardMap['🌊 Đại Dương Xanh'];
+                            const activeCount = getTableData().length;
+                            const cards = [
+                                { icon: 'package', label: 'Tổng sản phẩm',   value: result.total_products.toLocaleString('vi-VN'), color: 'text-blue-400',   border: 'border-blue-500/30' },
+                                { icon: 'star',    label: 'Rating Trung Bình', value: Number(result.market_avg_rating || 0).toFixed(2), color: 'text-yellow-400', border: 'border-yellow-500/30' },
+                                { ...activeCard,   value: activeCount.toLocaleString('vi-VN') },
+                            ];
+                            return (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {cards.map(({ icon, label, value, color, border }) => (
+                                        <div key={label} className={`bg-white rounded-xl border ${border} p-5 flex items-center gap-4`}>
+                                            <div className={`w-10 h-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0 ${color}`}>
+                                                <Icon name={icon} size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+                                                <p className={`text-xl font-bold ${color}`}>{value}</p>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            );
+                        })()}
 
 
 

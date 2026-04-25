@@ -616,6 +616,7 @@ Giữ đúng 5 phần:
                     "rating": p["rating"],
                     "category": p["categoryName"],
                     "url": p.get("product_url", ""),
+                    "product_id": str(p.get("product_id", "")),
                 }
             )
 
@@ -856,6 +857,7 @@ Giữ đúng 5 phần:
                     "rating": p["rating"],
                     "category": p["categoryName"],
                     "url": p.get("product_url", ""),
+                    "product_id": str(p.get("product_id", "")),
                 }
             )
 
