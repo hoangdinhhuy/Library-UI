@@ -3,7 +3,7 @@
 // ============================================================
 
 function BatchPage() {
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
     const advisorQuestions = [
         { id: '1', label: 'Nên tập trung vào phân khúc nào để dễ bán hơn?' },
         { id: '2', label: 'Mức giá đề xuất để cạnh tranh tốt là bao nhiêu?' },
@@ -32,6 +32,7 @@ function BatchPage() {
     const [chatInput, setChatInput] = useState('');
     const [chatLoading, setChatLoading] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const chatScrollRef = useRef(null);
     const [batchPriceFilter, setBatchPriceFilter] = useState('all');
     const [batchPage, setBatchPage] = useState(1);
     const [reviewModal, setReviewModal] = useState({ open: false, product: null, reviews: [], loading: false, error: null });
@@ -39,6 +40,11 @@ function BatchPage() {
     useEffect(() => {
         lucide.createIcons();
     }, [keywords, activeKeyword, analysisLoading, analysisResult, chatMessages, isChatOpen, reviewModal.open]);
+
+    useEffect(() => {
+        if (!isChatOpen || !chatScrollRef.current) return;
+        chatScrollRef.current.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
+    }, [chatMessages, isChatOpen]);
 
     const normalizeBotText = (value) =>
         String(value || '')
@@ -1022,7 +1028,7 @@ function BatchPage() {
                                 </div>
                             </div>
 
-                            <div className="h-72 overflow-y-auto p-3 space-y-3 bg-gray-50">
+                            <div ref={chatScrollRef} className="h-72 overflow-y-auto p-3 space-y-3 bg-gray-50">
                                 {chatMessages.map((m, idx) => (
                                     <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`max-w-[88%] px-3 py-2 rounded-lg text-xs leading-relaxed ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-gray-800 border border-blue-100'
